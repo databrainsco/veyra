@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../types'
 import type { DeviceCapabilities } from '../types'
-import { detectDeviceCapabilities } from './device'
+import { detectDeviceCapabilities, getEffectiveMemoryGB, isMobilePlatform } from './device'
 import { estimateTokens } from './helpers'
 
 export interface GenerationProfile {
@@ -14,15 +14,15 @@ let cachedCapabilities: DeviceCapabilities | null = null
 let cachedProfile: GenerationProfile | null = null
 
 export function computeGenerationProfile(capabilities: DeviceCapabilities): GenerationProfile {
-  const isMobile = capabilities.platform === 'iOS' || capabilities.platform === 'Android'
-  const memory = capabilities.estimatedMemoryGB ?? 4
+  const isMobile = isMobilePlatform(capabilities)
+  const memory = getEffectiveMemoryGB(capabilities)
 
   if (isMobile || memory < 4) {
     return {
-      contextWindowSize: 2048,
-      maxOutputTokens: 512,
-      maxRagTokens: 600,
-      maxRecentMessages: 4,
+      contextWindowSize: 1024,
+      maxOutputTokens: 256,
+      maxRagTokens: 0,
+      maxRecentMessages: 2,
     }
   }
 
@@ -116,5 +116,5 @@ export function getMaxInputTokens(
   contextWindowSize: number,
   maxOutputTokens: number,
 ): number {
-  return Math.max(512, contextWindowSize - maxOutputTokens - 256)
+  return Math.max(128, contextWindowSize - maxOutputTokens - 128)
 }

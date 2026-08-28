@@ -327,6 +327,14 @@
   font-size: 0.75rem;
 }
 
+.chat-model-badge {
+  display: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .chat-sidebar {
     display: none;
@@ -334,5 +342,9 @@
 
   .chat-menu-btn {
     display: flex;
+  }
+
+  .chat-model-badge {
+    display: inline-flex;
   }
 }

@@ -140,7 +140,7 @@ export class LocalLLMService implements LLMService {
 
     const chatOpts: ChatOptions = {
       context_window_size: contextWindowSize,
-      max_history_size: Math.max(512, contextWindowSize - 512),
+      max_history_size: Math.max(256, contextWindowSize - 128),
     }
 
     return CreateMLCEngine(

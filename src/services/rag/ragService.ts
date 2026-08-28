@@ -11,6 +11,7 @@ import {
   getGenerationProfile,
   getMaxInputTokens,
 } from '../../utils/generationProfile'
+import { detectDeviceCapabilities, isMobilePlatform } from '../../utils/device'
 
 export class RAGService {
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
@@ -33,6 +34,8 @@ export class RAGService {
     sources: SourceReference[]
   }> {
     const settings = await settingsRepo.get()
+    const capabilities = await detectDeviceCapabilities()
+    const useRag = settings.ragEnabled && !isMobilePlatform(capabilities)
     const summary = await summaryRepo.get(conversationId)
     const profile = await getGenerationProfile()
     const maxRagTokens = Math.min(settings.ragTokenBudget, profile.maxRagTokens)
@@ -41,7 +44,7 @@ export class RAGService {
     const maxInputTokens = getMaxInputTokens(contextWindow, maxOutputTokens)
 
     let ragResults: SearchResult[] = []
-    if (settings.ragEnabled) {
+    if (useRag) {
       ragResults = await this.search(question)
     }
 
@@ -64,6 +67,9 @@ export class RAGService {
     conversationTitle: string,
     messages: ChatMessage[],
   ): Promise<number> {
+    const capabilities = await detectDeviceCapabilities()
+    if (isMobilePlatform(capabilities)) return 0
+
     const settings = await settingsRepo.get()
     const embeddingService = getEmbeddingService()
     await embeddingService.initialize()

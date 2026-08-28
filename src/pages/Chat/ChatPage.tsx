@@ -10,8 +10,10 @@ import { MarkdownRenderer } from '../../components/chat/MarkdownRenderer'
 import { SourceList } from '../../components/chat/SourceList'
 import { ConversationDrawer } from '../../components/chat/ConversationDrawer'
 import { generateId, groupByDate } from '../../utils/helpers'
-import { formatUserError } from '../../utils/errors'
-import { detectDeviceCapabilities, isModelCompatible } from '../../utils/device'
+import { formatUserError, isGpuError } from '../../utils/errors'
+import { detectDeviceCapabilities, isModelCompatible, getRecommendedModelId } from '../../utils/device'
+import { applyDeviceOptimizedSettings } from '../../utils/deviceSettings'
+import { getModelInfo } from '../../services/llm/models'
 import { fileToDataUrl, validateAudioFile, validateImageFile } from '../../utils/files'
 import type { Conversation, ChatMessage, MessageAttachment } from '../../types'
 import './Chat.css'
@@ -50,14 +52,25 @@ export function ChatPage() {
       return true
     }
 
-    const settings = await settingsRepo.get()
+    await applyDeviceOptimizedSettings()
+
+    let settings = await settingsRepo.get()
+    const capabilities = await detectDeviceCapabilities()
+
+    if (!settings.activeModelId) {
+      const recommendedId = getRecommendedModelId(capabilities)
+      if (isModelCompatible(recommendedId, capabilities).compatible) {
+        await settingsRepo.update({ activeModelId: recommendedId })
+        settings = await settingsRepo.get()
+      }
+    }
+
     setActiveModelId(settings.activeModelId)
     if (!settings.activeModelId) {
       setModelLoaded(false)
       return false
     }
 
-    const capabilities = await detectDeviceCapabilities()
     const compatibility = isModelCompatible(settings.activeModelId, capabilities)
     if (!compatibility.compatible) {
       await settingsRepo.update({ activeModelId: null })
@@ -85,6 +98,7 @@ export function ChatPage() {
     initDone.current = true
 
     async function init() {
+      await applyDeviceOptimizedSettings()
       const convs = await loadConversations()
       if (convs.length > 0) {
         const first = convs[0]!
@@ -280,13 +294,39 @@ export function ChatPage() {
         createdAt: Date.now(),
       }))
 
+      const minimalMessages: ChatMessage[] = [
+        {
+          id: 'minimal-user',
+          conversationId: conv.id,
+          role: 'user',
+          content: userMsg.content,
+          createdAt: Date.now(),
+        },
+      ]
+
       let fullResponse = ''
-      for await (const chunk of llm.generate(chatMessages, {
-        temperature: settings.temperature,
-        maxTokens: settings.maxTokens,
-      })) {
-        fullResponse += chunk
-        setStreamingContent(fullResponse)
+      try {
+        for await (const chunk of llm.generate(chatMessages, {
+          temperature: settings.temperature,
+          maxTokens: settings.maxTokens,
+        })) {
+          fullResponse += chunk
+          setStreamingContent(fullResponse)
+        }
+      } catch (generationError) {
+        if (!isGpuError(generationError)) {
+          throw generationError
+        }
+
+        setStreamingContent('')
+        fullResponse = ''
+        for await (const chunk of llm.generate(minimalMessages, {
+          temperature: settings.temperature,
+          maxTokens: 128,
+        })) {
+          fullResponse += chunk
+          setStreamingContent(fullResponse)
+        }
       }
 
       const assistantMsg: ChatMessage = {
@@ -367,6 +407,8 @@ export function ChatPage() {
 
   const grouped = groupByDate(conversations)
 
+  const activeModelName = activeModelId ? getModelInfo(activeModelId)?.name : null
+
   return (
     <div className="chat-page">
       <aside className="chat-sidebar">
@@ -420,6 +462,9 @@ export function ChatPage() {
             <span className="badge badge-warning">
               Cargando {Math.round(modelLoadProgress * 100)}%
             </span>
+          )}
+          {!modelLoading && modelLoaded && activeModelName && (
+            <span className="badge badge-muted chat-model-badge">{activeModelName}</span>
           )}
           {!modelLoading && !modelLoaded && (
             <span className="badge badge-warning">Modelo no cargado</span>
