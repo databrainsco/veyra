@@ -3,6 +3,10 @@ import type { EmbeddingService } from './types'
 
 env.allowLocalModels = false
 env.useBrowserCache = true
+// WASM only — avoids WebGPU conflicts with WebLLM on mobile
+if (env.backends?.onnx?.wasm) {
+  env.backends.onnx.wasm.numThreads = 1
+}
 
 type FeatureExtractionPipeline = (
   text: string,

@@ -6,7 +6,9 @@ import { getLLMService } from '../../services/llm/LocalLLMService'
 import { ragService } from '../../services/rag/ragService'
 import { MarkdownRenderer } from '../../components/chat/MarkdownRenderer'
 import { SourceList } from '../../components/chat/SourceList'
+import { ConversationDrawer } from '../../components/chat/ConversationDrawer'
 import { generateId, groupByDate } from '../../utils/helpers'
+import { formatUserError } from '../../utils/errors'
 import type { Conversation, ChatMessage } from '../../types'
 import './Chat.css'
 
@@ -18,8 +20,11 @@ export function ChatPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [modelLoaded, setModelLoaded] = useState(false)
+  const [modelLoading, setModelLoading] = useState(false)
+  const [modelLoadProgress, setModelLoadProgress] = useState(0)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const initDone = useRef(false)
 
   const loadConversations = useCallback(async () => {
     const convs = await conversationRepo.getAll()
@@ -27,18 +32,50 @@ export function ChatPage() {
     return convs
   }, [])
 
+  const loadModelIfNeeded = useCallback(async () => {
+    const llm = getLLMService()
+    if (llm.isLoaded()) {
+      setModelLoaded(true)
+      return true
+    }
+
+    const settings = await settingsRepo.get()
+    if (!settings.activeModelId) {
+      setModelLoaded(false)
+      return false
+    }
+
+    setModelLoading(true)
+    setModelLoadProgress(0)
+    try {
+      await llm.ensureModelLoaded(settings.activeModelId, (p) => setModelLoadProgress(p))
+      setModelLoaded(true)
+      return true
+    } catch {
+      setModelLoaded(false)
+      return false
+    } finally {
+      setModelLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    loadConversations().then(async (convs) => {
-      if (convs.length > 0 && !activeConversation) {
-        setActiveConversation(convs[0]!)
-        const msgs = await messageRepo.getByConversation(convs[0]!.id)
+    if (initDone.current) return
+    initDone.current = true
+
+    async function init() {
+      const convs = await loadConversations()
+      if (convs.length > 0) {
+        const first = convs[0]!
+        setActiveConversation(first)
+        const msgs = await messageRepo.getByConversation(first.id)
         setMessages(msgs)
       }
-    })
+      await loadModelIfNeeded()
+    }
 
-    const llm = getLLMService()
-    setModelLoaded(llm.isLoaded())
-  }, [loadConversations, activeConversation])
+    void init()
+  }, [loadConversations, loadModelIfNeeded])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -71,6 +108,7 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
     setConversations((prev) => [conv, ...prev])
     setActiveConversation(conv)
     setMessages([welcomeMsg])
+    setDrawerOpen(false)
   }
 
   async function selectConversation(conv: Conversation) {
@@ -98,32 +136,30 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
     }
 
     await messageRepo.create(userMsg)
-    setMessages((prev) => [...prev, userMsg])
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
     setInput('')
     setIsGenerating(true)
     setStreamingContent('')
 
     const llm = getLLMService()
-    if (!llm.isLoaded()) {
+    const modelReady = llm.isLoaded() || (await loadModelIfNeeded())
+
+    if (!modelReady) {
       const settings = await settingsRepo.get()
-      if (settings.activeModelId) {
-        try {
-          await llm.loadModel(settings.activeModelId)
-          setModelLoaded(true)
-        } catch {
-          const errorMsg: ChatMessage = {
-            id: generateId(),
-            conversationId: conv.id,
-            role: 'assistant',
-            content: 'No hay modelo cargado. Ve a Modelos para instalar uno.',
-            createdAt: Date.now(),
-          }
-          await messageRepo.create(errorMsg)
-          setMessages((prev) => [...prev, errorMsg])
-          setIsGenerating(false)
-          return
-        }
+      const errorMsg: ChatMessage = {
+        id: generateId(),
+        conversationId: conv.id,
+        role: 'assistant',
+        content: settings.activeModelId
+          ? 'No se pudo cargar el modelo. Ve a Modelos e intenta activarlo de nuevo.'
+          : 'No hay modelo instalado. Ve a Modelos para descargar uno antes de chatear.',
+        createdAt: Date.now(),
       }
+      await messageRepo.create(errorMsg)
+      setMessages((prev) => [...prev, errorMsg])
+      setIsGenerating(false)
+      return
     }
 
     try {
@@ -131,7 +167,7 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
       const { messages: contextMessages, sources } = await ragService.buildContext(
         conv.id,
         userMsg.content,
-        [...messages, userMsg],
+        updatedMessages,
       )
 
       const chatMessages: ChatMessage[] = contextMessages.map((m, i) => ({
@@ -174,13 +210,15 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
         await conversationRepo.update({ ...conv, updatedAt: Date.now() })
       }
 
-      ragService.indexConversation(conv.id, conv.title, [...messages, userMsg, assistantMsg]).catch(() => {})
+      ragService
+        .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
+        .catch(() => {})
     } catch (error) {
       const errorMsg: ChatMessage = {
         id: generateId(),
         conversationId: conv.id,
         role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        content: formatUserError(error),
         createdAt: Date.now(),
       }
       await messageRepo.create(errorMsg)
@@ -211,7 +249,7 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
           content: streamingContent,
           createdAt: Date.now(),
         }
-        messageRepo.create(msg)
+        void messageRepo.create(msg)
         setMessages((prev) => [...prev, msg])
         setStreamingContent('')
       }
@@ -252,15 +290,48 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
         </div>
       </aside>
 
+      <ConversationDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        conversations={conversations}
+        activeId={activeConversation?.id ?? null}
+        onSelect={selectConversation}
+        onCreate={createConversation}
+      />
+
       <div className="chat-main">
         <div className="chat-header">
-          <h2 style={{ fontSize: '1rem', fontWeight: 500 }}>
+          <button
+            className="btn-ghost chat-menu-btn"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Ver conversaciones"
+          >
+            ☰
+          </button>
+          <h2 style={{ fontSize: '1rem', fontWeight: 500, flex: 1, minWidth: 0 }} className="chat-title">
             {activeConversation?.title ?? 'Chat'}
           </h2>
-          {!modelLoaded && (
+          {modelLoading && (
+            <span className="badge badge-warning">
+              Cargando {Math.round(modelLoadProgress * 100)}%
+            </span>
+          )}
+          {!modelLoading && !modelLoaded && (
             <span className="badge badge-warning">Modelo no cargado</span>
           )}
         </div>
+
+        {modelLoading && (
+          <div className="model-loading-banner">
+            <div className="progress-bar">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${modelLoadProgress * 100}%` }}
+              />
+            </div>
+            <span>Cargando modelo de IA...</span>
+          </div>
+        )}
 
         {!activeConversation ? (
           <div className="chat-empty">
@@ -321,14 +392,13 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
             <div className="chat-input-area">
               <div className="chat-input-wrapper">
                 <textarea
-                  ref={inputRef}
                   className="chat-input"
-                  placeholder="Escribe algo..."
+                  placeholder={modelLoading ? 'Cargando modelo...' : 'Escribe algo...'}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  disabled={isGenerating}
+                  disabled={isGenerating || modelLoading}
                 />
                 {isGenerating ? (
                   <button className="chat-send-btn" onClick={stopGeneration} title="Detener">
@@ -338,7 +408,7 @@ Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
                   <button
                     className="chat-send-btn"
                     onClick={sendMessage}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || modelLoading}
                     title="Enviar"
                   >
                     ➤

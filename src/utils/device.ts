@@ -50,13 +50,19 @@ export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
 }
 
 export function getRecommendedModelId(capabilities: DeviceCapabilities): string {
-  if (capabilities.webgpu && (capabilities.estimatedMemoryGB ?? 4) >= 6) {
+  const isMobile = capabilities.platform === 'iOS' || capabilities.platform === 'Android'
+  const memory = capabilities.estimatedMemoryGB ?? 4
+
+  if (isMobile || memory < 4) {
+    return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
+  }
+  if (capabilities.webgpu && memory >= 6) {
     return 'Llama-3.2-3B-Instruct-q4f16_1-MLC'
   }
   if (capabilities.webgpu) {
     return 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
   }
-  return 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
+  return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
 }
 
 export function isModelCompatible(
