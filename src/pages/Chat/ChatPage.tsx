@@ -9,7 +9,19 @@ import { ragService } from '../../services/rag/ragService'
 import { MarkdownRenderer } from '../../components/chat/MarkdownRenderer'
 import { SourceList } from '../../components/chat/SourceList'
 import { ConversationDrawer } from '../../components/chat/ConversationDrawer'
-import { generateId, groupByDate } from '../../utils/helpers'
+import { ConversationList } from '../../components/chat/ConversationList'
+import {
+  CopyIcon,
+  RetryIcon,
+  PlusIcon,
+  SendIcon,
+  StopIcon,
+  MenuIcon,
+  ImageIcon,
+  AudioIcon,
+  CloseIcon,
+} from '../../components/chat/ChatIcons'
+import { generateId } from '../../utils/helpers'
 import { formatUserError, isGpuError } from '../../utils/errors'
 import { detectDeviceCapabilities, isModelCompatible, getRecommendedModelId } from '../../utils/device'
 import { applyDeviceOptimizedSettings } from '../../utils/deviceSettings'
@@ -35,6 +47,8 @@ export function ChatPage() {
   const [pendingAudio, setPendingAudio] = useState<File | null>(null)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [transcribing, setTranscribing] = useState(false)
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -151,6 +165,179 @@ export function ChatPage() {
     setMessages(msgs)
   }
 
+  async function renameConversation(conv: Conversation, title: string) {
+    const updated = { ...conv, title, updatedAt: Date.now() }
+    await conversationRepo.update(updated)
+    setConversations((prev) => prev.map((c) => (c.id === conv.id ? updated : c)))
+    if (activeConversation?.id === conv.id) {
+      setActiveConversation(updated)
+    }
+  }
+
+  async function deleteConversation(conv: Conversation) {
+    await conversationRepo.delete(conv.id)
+    const remaining = conversations.filter((c) => c.id !== conv.id)
+    setConversations(remaining)
+
+    if (activeConversation?.id === conv.id) {
+      const next = remaining[0] ?? null
+      setActiveConversation(next)
+      if (next) {
+        const msgs = await messageRepo.getByConversation(next.id)
+        setMessages(msgs)
+      } else {
+        setMessages([])
+      }
+    }
+  }
+
+  async function runGeneration(
+    conv: Conversation,
+    historyBeforeUser: ChatMessage[],
+    userMsg: ChatMessage,
+  ) {
+    setIsGenerating(true)
+    setStreamingContent('')
+
+    const llm = getLLMService()
+    const modelReady = llm.isLoaded() || (await loadModelIfNeeded())
+
+    if (!modelReady) {
+      const settings = await settingsRepo.get()
+      const errorMsg: ChatMessage = {
+        id: generateId(),
+        conversationId: conv.id,
+        role: 'assistant',
+        content: settings.activeModelId
+          ? 'No se pudo cargar el modelo. Ve a Modelos e intenta activarlo de nuevo.'
+          : 'No hay modelo instalado. Ve a Modelos para descargar uno antes de chatear.',
+        createdAt: Date.now(),
+      }
+      await messageRepo.create(errorMsg)
+      setMessages((prev) => [...prev, errorMsg])
+      setIsGenerating(false)
+      return
+    }
+
+    const updatedMessages = [...historyBeforeUser, userMsg]
+
+    try {
+      const settings = await settingsRepo.get()
+      const { messages: contextMessages, sources } = await ragService.buildContext(
+        conv.id,
+        userMsg.content,
+        updatedMessages,
+      )
+
+      const chatMessages: ChatMessage[] = contextMessages.map((m, i) => ({
+        id: `ctx-${i}`,
+        conversationId: conv.id,
+        role: m.role,
+        content: m.content,
+        createdAt: Date.now(),
+      }))
+
+      const minimalMessages: ChatMessage[] = [
+        {
+          id: 'minimal-user',
+          conversationId: conv.id,
+          role: 'user',
+          content: userMsg.content,
+          createdAt: Date.now(),
+        },
+      ]
+
+      let fullResponse = ''
+      try {
+        for await (const chunk of llm.generate(chatMessages, {
+          temperature: settings.temperature,
+          maxTokens: settings.maxTokens,
+        })) {
+          fullResponse += chunk
+          setStreamingContent(fullResponse)
+        }
+      } catch (generationError) {
+        if (!isGpuError(generationError)) {
+          throw generationError
+        }
+
+        setStreamingContent('')
+        fullResponse = ''
+        for await (const chunk of llm.generate(minimalMessages, {
+          temperature: settings.temperature,
+          maxTokens: 128,
+        })) {
+          fullResponse += chunk
+          setStreamingContent(fullResponse)
+        }
+      }
+
+      const assistantMsg: ChatMessage = {
+        id: generateId(),
+        conversationId: conv.id,
+        role: 'assistant',
+        content: fullResponse,
+        createdAt: Date.now(),
+        metadata: { sources, ragUsed: sources.length > 0 },
+      }
+
+      await messageRepo.create(assistantMsg)
+      setMessages((prev) => [...prev, assistantMsg])
+      setStreamingContent('')
+
+      if (conv.title === 'Nueva conversación') {
+        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '')
+        const updated = { ...conv, title, updatedAt: Date.now() }
+        await conversationRepo.update(updated)
+        setActiveConversation(updated)
+        setConversations((prev) => prev.map((c) => (c.id === conv.id ? updated : c)))
+      } else {
+        await conversationRepo.update({ ...conv, updatedAt: Date.now() })
+      }
+
+      window.setTimeout(() => {
+        ragService
+          .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
+          .catch(() => {})
+      }, 2000)
+    } catch (error) {
+      const errorMsg: ChatMessage = {
+        id: generateId(),
+        conversationId: conv.id,
+        role: 'assistant',
+        content: formatUserError(error),
+        createdAt: Date.now(),
+      }
+      await messageRepo.create(errorMsg)
+      setMessages((prev) => [...prev, errorMsg])
+      setStreamingContent('')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  async function retryMessage(assistantMsg: ChatMessage) {
+    if (isGenerating || !activeConversation) return
+
+    const idx = messages.findIndex((m) => m.id === assistantMsg.id)
+    if (idx <= 0) return
+
+    let userMsg: ChatMessage | null = null
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i]!.role === 'user') {
+        userMsg = messages[i]!
+        break
+      }
+    }
+    if (!userMsg) return
+
+    const conv = activeConversation
+    await messageRepo.deleteFrom(conv.id, assistantMsg.createdAt)
+    const historyBeforeUser = messages.filter((m) => m.createdAt < userMsg!.createdAt)
+    setMessages([...historyBeforeUser, userMsg])
+    await runGeneration(conv, historyBeforeUser, userMsg)
+  }
+
   async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -261,128 +448,16 @@ export function ChatPage() {
     }
 
     await messageRepo.create(userMsg)
-    const updatedMessages = [...messages, userMsg]
+    const historyBeforeUser = messages
+    const updatedMessages = [...historyBeforeUser, userMsg]
     setMessages(updatedMessages)
     setInput('')
     setPendingImage(null)
     setPendingAudio(null)
     setAttachmentError(null)
-    setIsGenerating(true)
-    setStreamingContent('')
+    setAttachMenuOpen(false)
 
-    const llm = getLLMService()
-    const modelReady = llm.isLoaded() || (await loadModelIfNeeded())
-
-    if (!modelReady) {
-      const settings = await settingsRepo.get()
-      const errorMsg: ChatMessage = {
-        id: generateId(),
-        conversationId: conv.id,
-        role: 'assistant',
-        content: settings.activeModelId
-          ? 'No se pudo cargar el modelo. Ve a Modelos e intenta activarlo de nuevo.'
-          : 'No hay modelo instalado. Ve a Modelos para descargar uno antes de chatear.',
-        createdAt: Date.now(),
-      }
-      await messageRepo.create(errorMsg)
-      setMessages((prev) => [...prev, errorMsg])
-      setIsGenerating(false)
-      return
-    }
-
-    try {
-      const settings = await settingsRepo.get()
-      const { messages: contextMessages, sources } = await ragService.buildContext(
-        conv.id,
-        userMsg.content,
-        updatedMessages,
-      )
-
-      const chatMessages: ChatMessage[] = contextMessages.map((m, i) => ({
-        id: `ctx-${i}`,
-        conversationId: conv!.id,
-        role: m.role,
-        content: m.content,
-        createdAt: Date.now(),
-      }))
-
-      const minimalMessages: ChatMessage[] = [
-        {
-          id: 'minimal-user',
-          conversationId: conv.id,
-          role: 'user',
-          content: userMsg.content,
-          createdAt: Date.now(),
-        },
-      ]
-
-      let fullResponse = ''
-      try {
-        for await (const chunk of llm.generate(chatMessages, {
-          temperature: settings.temperature,
-          maxTokens: settings.maxTokens,
-        })) {
-          fullResponse += chunk
-          setStreamingContent(fullResponse)
-        }
-      } catch (generationError) {
-        if (!isGpuError(generationError)) {
-          throw generationError
-        }
-
-        setStreamingContent('')
-        fullResponse = ''
-        for await (const chunk of llm.generate(minimalMessages, {
-          temperature: settings.temperature,
-          maxTokens: 128,
-        })) {
-          fullResponse += chunk
-          setStreamingContent(fullResponse)
-        }
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: generateId(),
-        conversationId: conv.id,
-        role: 'assistant',
-        content: fullResponse,
-        createdAt: Date.now(),
-        metadata: { sources, ragUsed: sources.length > 0 },
-      }
-
-      await messageRepo.create(assistantMsg)
-      setMessages((prev) => [...prev, assistantMsg])
-      setStreamingContent('')
-
-      if (conv.title === 'Nueva conversación') {
-        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '')
-        const updated = { ...conv, title, updatedAt: Date.now() }
-        await conversationRepo.update(updated)
-        setActiveConversation(updated)
-        setConversations((prev) => prev.map((c) => (c.id === conv!.id ? updated : c)))
-      } else {
-        await conversationRepo.update({ ...conv, updatedAt: Date.now() })
-      }
-
-      window.setTimeout(() => {
-        ragService
-          .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
-          .catch(() => {})
-      }, 2000)
-    } catch (error) {
-      const errorMsg: ChatMessage = {
-        id: generateId(),
-        conversationId: conv.id,
-        role: 'assistant',
-        content: formatUserError(error),
-        createdAt: Date.now(),
-      }
-      await messageRepo.create(errorMsg)
-      setMessages((prev) => [...prev, errorMsg])
-      setStreamingContent('')
-    } finally {
-      setIsGenerating(false)
-    }
+    await runGeneration(conv, historyBeforeUser, userMsg)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -413,13 +488,14 @@ export function ChatPage() {
     }
   }
 
-  async function copyMessage(content: string) {
+  async function copyMessage(id: string, content: string) {
     await navigator.clipboard.writeText(content)
+    setCopiedId(id)
+    window.setTimeout(() => setCopiedId(null), 1500)
   }
 
-  const grouped = groupByDate(conversations)
-
   const activeModelName = activeModelId ? getModelInfo(activeModelId)?.name : null
+  const canSend = (input.trim() || pendingImage || pendingAudio) && !modelLoading && !transcribing
 
   return (
     <div className="chat-page">
@@ -430,22 +506,13 @@ export function ChatPage() {
           </button>
         </div>
         <div className="chat-conversation-list">
-          {Object.entries(grouped).map(([label, convs]) =>
-            convs.length > 0 ? (
-              <div key={label}>
-                <div className="conversation-group-label">{label}</div>
-                {convs.map((conv) => (
-                  <button
-                    key={conv.id}
-                    className={`conversation-item ${activeConversation?.id === conv.id ? 'active' : ''}`}
-                    onClick={() => selectConversation(conv)}
-                  >
-                    {conv.title}
-                  </button>
-                ))}
-              </div>
-            ) : null,
-          )}
+          <ConversationList
+            conversations={conversations}
+            activeId={activeConversation?.id ?? null}
+            onSelect={selectConversation}
+            onRename={renameConversation}
+            onDelete={deleteConversation}
+          />
         </div>
       </aside>
 
@@ -456,16 +523,18 @@ export function ChatPage() {
         activeId={activeConversation?.id ?? null}
         onSelect={selectConversation}
         onCreate={createConversation}
+        onRename={renameConversation}
+        onDelete={deleteConversation}
       />
 
       <div className="chat-main">
         <div className="chat-header">
           <button
-            className="btn-ghost chat-menu-btn"
+            className="icon-btn chat-menu-btn"
             onClick={() => setDrawerOpen(true)}
             aria-label="Ver conversaciones"
           >
-            Chats
+            <MenuIcon />
           </button>
           <h2 style={{ fontSize: '1rem', fontWeight: 500, flex: 1, minWidth: 0 }} className="chat-title">
             {activeConversation?.title ?? 'Chat'}
@@ -547,9 +616,26 @@ export function ChatPage() {
                     </div>
                     {msg.role === 'assistant' && (
                       <div className="message-actions">
-                        <button className="btn-ghost" onClick={() => copyMessage(msg.content)}>
-                          Copiar
+                        <button
+                          className="message-icon-btn"
+                          onClick={() => copyMessage(msg.id, msg.content)}
+                          aria-label="Copiar"
+                          title="Copiar"
+                        >
+                          <CopyIcon />
                         </button>
+                        <button
+                          className="message-icon-btn"
+                          onClick={() => retryMessage(msg)}
+                          disabled={isGenerating}
+                          aria-label="Reintentar"
+                          title="Reintentar"
+                        >
+                          <RetryIcon />
+                        </button>
+                        {copiedId === msg.id && (
+                          <span className="message-copied-hint">Copiado</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -579,16 +665,16 @@ export function ChatPage() {
                     <div className="attachment-chip">
                       <img src={pendingImage.dataUrl} alt="" className="attachment-thumb" />
                       <span>{pendingImage.name}</span>
-                      <button className="btn-ghost attachment-remove" onClick={() => setPendingImage(null)}>
-                        Quitar
+                      <button className="icon-btn attachment-remove" onClick={() => setPendingImage(null)} aria-label="Quitar imagen">
+                        <CloseIcon size={14} />
                       </button>
                     </div>
                   )}
                   {pendingAudio && (
                     <div className="attachment-chip">
                       <span>{pendingAudio.name}</span>
-                      <button className="btn-ghost attachment-remove" onClick={() => setPendingAudio(null)}>
-                        Quitar
+                      <button className="icon-btn attachment-remove" onClick={() => setPendingAudio(null)} aria-label="Quitar audio">
+                        <CloseIcon size={14} />
                       </button>
                     </div>
                   )}
@@ -597,25 +683,47 @@ export function ChatPage() {
               {attachmentError && (
                 <p className="chat-attachment-error">{attachmentError}</p>
               )}
-              <div className="chat-input-toolbar">
-                <button
-                  type="button"
-                  className="chat-text-btn"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={isGenerating || modelLoading || transcribing}
-                >
-                  Imagen
-                </button>
-                <button
-                  type="button"
-                  className="chat-text-btn"
-                  onClick={() => audioInputRef.current?.click()}
-                  disabled={isGenerating || modelLoading || transcribing}
-                >
-                  Audio
-                </button>
-              </div>
-              <div className="chat-input-wrapper">
+              <div className="chat-input-bar">
+                <div className="chat-input-attach">
+                  <button
+                    type="button"
+                    className="icon-btn chat-attach-toggle"
+                    onClick={() => setAttachMenuOpen((open) => !open)}
+                    disabled={isGenerating || modelLoading || transcribing}
+                    aria-label="Adjuntar"
+                    aria-expanded={attachMenuOpen}
+                  >
+                    <PlusIcon />
+                  </button>
+                  {attachMenuOpen && (
+                    <div className="chat-attach-menu">
+                      <button
+                        type="button"
+                        className="chat-attach-option"
+                        onClick={() => {
+                          imageInputRef.current?.click()
+                          setAttachMenuOpen(false)
+                        }}
+                        disabled={isGenerating || modelLoading || transcribing}
+                      >
+                        <ImageIcon />
+                        <span>Imagen</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-attach-option"
+                        onClick={() => {
+                          audioInputRef.current?.click()
+                          setAttachMenuOpen(false)
+                        }}
+                        disabled={isGenerating || modelLoading || transcribing}
+                      >
+                        <AudioIcon />
+                        <span>Audio</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -637,7 +745,7 @@ export function ChatPage() {
                       ? 'Transcribiendo audio...'
                       : modelLoading
                         ? 'Cargando modelo...'
-                        : 'Escribe algo...'
+                        : 'Escribe un mensaje...'
                   }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -646,16 +754,21 @@ export function ChatPage() {
                   disabled={isGenerating || modelLoading || transcribing}
                 />
                 {isGenerating ? (
-                  <button className="chat-action-btn" onClick={stopGeneration}>
-                    Detener
+                  <button
+                    className="chat-send-btn chat-stop-btn"
+                    onClick={stopGeneration}
+                    aria-label="Detener"
+                  >
+                    <StopIcon />
                   </button>
                 ) : (
                   <button
-                    className="chat-action-btn"
+                    className={`chat-send-btn ${canSend ? 'active' : ''}`}
                     onClick={sendMessage}
-                    disabled={(!input.trim() && !pendingImage && !pendingAudio) || modelLoading || transcribing}
+                    disabled={!canSend}
+                    aria-label="Enviar"
                   >
-                    Enviar
+                    <SendIcon />
                   </button>
                 )}
               </div>

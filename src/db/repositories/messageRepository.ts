@@ -40,6 +40,18 @@ export class MessageRepository {
     await tx.done
   }
 
+  async deleteFrom(conversationId: string, fromTimestamp: number): Promise<void> {
+    const messages = await this.getByConversation(conversationId)
+    const db = await getDB()
+    const tx = db.transaction('messages', 'readwrite')
+    for (const msg of messages) {
+      if (msg.createdAt >= fromTimestamp) {
+        await tx.store.delete(msg.id)
+      }
+    }
+    await tx.done
+  }
+
   async count(): Promise<number> {
     const db = await getDB()
     return db.count('messages')

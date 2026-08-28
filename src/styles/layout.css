@@ -173,11 +173,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 4px;
+  justify-content: center;
+  padding: 8px 12px;
   color: var(--text-muted);
-  font-size: 0.625rem;
-  min-width: 56px;
+  min-width: 48px;
+  min-height: 48px;
 }
 
 .mobile-nav-item.active {

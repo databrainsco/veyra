@@ -1,5 +1,6 @@
 import type { Conversation } from '../../types'
-import { groupByDate } from '../../utils/helpers'
+import { ConversationList } from './ConversationList'
+import { CloseIcon } from './ChatIcons'
 
 interface ConversationDrawerProps {
   open: boolean
@@ -8,6 +9,8 @@ interface ConversationDrawerProps {
   activeId: string | null
   onSelect: (conv: Conversation) => void
   onCreate: () => void
+  onRename: (conv: Conversation, title: string) => void
+  onDelete: (conv: Conversation) => void
 }
 
 export function ConversationDrawer({
@@ -17,9 +20,9 @@ export function ConversationDrawer({
   activeId,
   onSelect,
   onCreate,
+  onRename,
+  onDelete,
 }: ConversationDrawerProps) {
-  const grouped = groupByDate(conversations)
-
   function handleSelect(conv: Conversation) {
     onSelect(conv)
     onClose()
@@ -35,8 +38,8 @@ export function ConversationDrawer({
       <aside className={`drawer conversation-drawer ${open ? 'open' : ''}`} aria-label="Conversaciones">
         <div className="conversation-drawer-header">
           <h2>Conversaciones</h2>
-          <button className="btn-ghost" onClick={onClose} aria-label="Cerrar">
-            Cerrar
+          <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
+            <CloseIcon />
           </button>
         </div>
         <div className="conversation-drawer-actions">
@@ -45,26 +48,13 @@ export function ConversationDrawer({
           </button>
         </div>
         <div className="conversation-drawer-list">
-          {conversations.length === 0 ? (
-            <p className="conversation-drawer-empty">No hay conversaciones todavía</p>
-          ) : (
-            Object.entries(grouped).map(([label, convs]) =>
-              convs.length > 0 ? (
-                <div key={label}>
-                  <div className="conversation-group-label">{label}</div>
-                  {convs.map((conv) => (
-                    <button
-                      key={conv.id}
-                      className={`conversation-item ${activeId === conv.id ? 'active' : ''}`}
-                      onClick={() => handleSelect(conv)}
-                    >
-                      {conv.title}
-                    </button>
-                  ))}
-                </div>
-              ) : null,
-            )
-          )}
+          <ConversationList
+            conversations={conversations}
+            activeId={activeId}
+            onSelect={handleSelect}
+            onRename={onRename}
+            onDelete={onDelete}
+          />
         </div>
       </aside>
     </>

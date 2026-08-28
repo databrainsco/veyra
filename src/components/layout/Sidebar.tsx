@@ -1,22 +1,30 @@
 import { NavLink, Link } from 'react-router-dom'
 import { HomeIcon } from './HomeIcon'
+import {
+  NavHomeIcon,
+  NavChatIcon,
+  NavMemoryIcon,
+  NavLibraryIcon,
+  NavModelsIcon,
+  NavSettingsIcon,
+} from './NavIcons'
 import { formatDeploymentVersion, formatBuildDateTime, getCommitUrl, getShortBuildHash } from '../../utils/version'
 import '../../styles/layout.css'
 
 const navItems = [
-  { to: '/app', label: 'Inicio' },
-  { to: '/app/chat', label: 'Chat' },
-  { to: '/app/memory', label: 'Memoria' },
-  { to: '/app/library', label: 'Biblioteca' },
-  { to: '/app/models', label: 'Modelos' },
-  { to: '/app/settings', label: 'Configuración' },
+  { to: '/app', label: 'Inicio', Icon: NavHomeIcon },
+  { to: '/app/chat', label: 'Chat', Icon: NavChatIcon },
+  { to: '/app/memory', label: 'Memoria', Icon: NavMemoryIcon },
+  { to: '/app/library', label: 'Biblioteca', Icon: NavLibraryIcon },
+  { to: '/app/models', label: 'Modelos', Icon: NavModelsIcon },
+  { to: '/app/settings', label: 'Configuración', Icon: NavSettingsIcon },
 ]
 
 export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <Link to="/app" className="sidebar-home-link" aria-label="Ir al menú">
+        <Link to="/app" className="sidebar-home-link" aria-label="Ir al inicio">
           <HomeIcon />
         </Link>
         <Link to="/app" className="sidebar-logo">VEYRA</Link>
@@ -29,6 +37,7 @@ export function Sidebar() {
             end={item.to === '/app'}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
+            <item.Icon size={18} />
             <span>{item.label}</span>
           </NavLink>
         ))}
@@ -40,7 +49,7 @@ export function Sidebar() {
 
 export function MobileNav() {
   return (
-    <nav className="mobile-nav">
+    <nav className="mobile-nav" aria-label="Navegación principal">
       <div className="mobile-nav-items">
         {navItems.map((item) => (
           <NavLink
@@ -48,8 +57,10 @@ export function MobileNav() {
             to={item.to}
             end={item.to === '/app'}
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+            aria-label={item.label}
+            title={item.label}
           >
-            <span>{item.label}</span>
+            <item.Icon />
           </NavLink>
         ))}
       </div>

@@ -20,6 +20,7 @@ import { ModelCard } from '../../components/models/ModelCard'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
 import type { LLMCatalogEntry } from '../../services/llm/models'
 import type { SpeechCatalogEntry } from '../../services/speech/speechModels'
+import './ModelsPage.css'
 
 function ModelSection({
   title,
@@ -212,19 +213,13 @@ export function ModelsPage() {
         Solo puedes descargar modelos compatibles con tu dispositivo.
       </p>
 
-      <div className="card" style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: '0.9375rem', marginBottom: 12 }}>Dispositivos compatibles</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <details className="models-collapsible card" style={{ marginBottom: 24 }}>
+        <summary className="models-collapsible-summary">
+          Dispositivos compatibles
+        </summary>
+        <div className="models-collapsible-body">
           {DEVICE_COMPATIBILITY_TIERS.map((tier) => (
-            <div
-              key={tier.deviceLabel}
-              style={{
-                padding: 12,
-                background: 'var(--bg-tertiary)',
-                borderRadius: 8,
-                fontSize: '0.8125rem',
-              }}
-            >
+            <div key={tier.deviceLabel} className="models-tier-card">
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{tier.deviceLabel}</div>
               <div style={{ color: 'var(--text-muted)', marginBottom: 6 }}>{tier.requirements}</div>
               <div style={{ color: 'var(--text-secondary)' }}>
@@ -236,7 +231,7 @@ export function ModelsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </details>
 
       {capabilities && (
         <div className="card" style={{ marginBottom: 24 }}>

@@ -1,0 +1,42 @@
+.models-collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.models-collapsible-summary {
+  padding: 16px 20px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.models-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.models-collapsible-summary::after {
+  content: '▾';
+  float: right;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.models-collapsible:not([open]) .models-collapsible-summary::after {
+  transform: rotate(-90deg);
+}
+
+.models-collapsible-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.models-tier-card {
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}

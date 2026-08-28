@@ -4,83 +4,54 @@
   height: 100%;
 }
 
-.app-menu-header {
-  margin-bottom: 20px;
-}
-
-.app-menu-header h1 {
-  font-size: 1.5rem;
-  margin-bottom: 8px;
-}
-
-.app-menu-header p {
-  color: var(--text-secondary);
-  font-size: 0.9375rem;
-}
-
-.app-menu-model {
-  margin-bottom: 20px;
-  padding: 16px;
-}
-
-.app-menu-model-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
-}
-
-.app-menu-model-name {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.app-menu-model-hint {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.app-menu-grid {
+.app-home {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
 }
 
-.app-menu-card {
-  display: block;
-  padding: 18px 20px;
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s, background 0.15s;
+.app-home-content {
+  max-width: 420px;
+  text-align: center;
+  padding: 20px 0;
 }
 
-.app-menu-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-tertiary);
+.app-home-logo {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 12px;
 }
 
-.app-menu-card h2 {
-  font-size: 1.0625rem;
+.app-home-tagline {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
-.app-menu-card p {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.4;
-}
-
-.app-menu-home-link {
-  display: inline-block;
-  margin-top: 24px;
+.app-home-subtitle {
   font-size: 0.875rem;
   color: var(--text-muted);
+  margin-bottom: 24px;
 }
 
-.app-menu-home-link:hover {
-  color: var(--accent);
+.app-home-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.app-home-cta {
+  display: inline-flex;
+  min-width: 160px;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.app-home-version {
+  margin-top: 32px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
