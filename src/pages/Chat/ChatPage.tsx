@@ -328,8 +328,9 @@ export function ChatPage() {
     }
   }
 
-  function stopGeneration() {
-    getLLMService().abort()
+  async function stopGeneration() {
+    const llm = getLLMService()
+    await llm.abort()
     setIsGenerating(false)
     if (streamingContent) {
       const conv = activeConversation

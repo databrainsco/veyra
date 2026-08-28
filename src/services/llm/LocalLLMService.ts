@@ -45,6 +45,9 @@ export class LocalLLMService implements LLMService {
   private currentModelId: string | null = null
   private abortController: AbortController | null = null
   private loadPromise: Promise<void> | null = null
+  private activeGenerations = 0
+  private generationGate: Promise<void> = Promise.resolve()
+  private releaseGenerationGate: (() => void) | null = null
 
   async initialize(): Promise<void> {
     // Lazy init on loadModel
@@ -76,38 +79,79 @@ export class LocalLLMService implements LLMService {
     }
   }
 
+  private acquireGenerationGate(): void {
+    if (this.activeGenerations === 0) {
+      this.generationGate = new Promise<void>((resolve) => {
+        this.releaseGenerationGate = resolve
+      })
+    }
+    this.activeGenerations += 1
+  }
+
+  private releaseGeneration(): void {
+    this.activeGenerations = Math.max(0, this.activeGenerations - 1)
+    if (this.activeGenerations === 0) {
+      this.releaseGenerationGate?.()
+      this.releaseGenerationGate = null
+    }
+  }
+
+  private async waitForGenerationToFinish(): Promise<void> {
+    if (this.activeGenerations === 0) return
+
+    this.abortController?.abort()
+    if (this.engine) {
+      try {
+        await this.engine.interruptGenerate()
+      } catch {
+        // Engine may already be disposed.
+      }
+    }
+
+    await this.generationGate
+  }
+
+  private async createEngine(
+    modelId: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<MLCEngine> {
+    const chatOpts: ChatOptions | undefined = isVisionModel(modelId)
+      ? { context_window_size: 6144 }
+      : undefined
+
+    return CreateMLCEngine(
+      modelId,
+      {
+        initProgressCallback: (report) => {
+          const progress = report.progress ?? 0
+          onProgress?.(progress)
+          void modelRepo.save({
+            modelId,
+            status: 'downloading',
+            downloadProgress: progress,
+            downloadedBytes: Math.floor(progress * (getModelInfo(modelId)?.sizeBytes ?? 0)),
+            totalBytes: getModelInfo(modelId)?.sizeBytes,
+          })
+        },
+      },
+      chatOpts,
+    )
+  }
+
   private async loadModelInternal(
     modelId: string,
     onProgress?: (progress: number) => void,
   ): Promise<void> {
+    await this.waitForGenerationToFinish()
+
     if (this.engine) {
-      await this.unloadModel()
+      await this.unloadModelInternal()
     }
 
     await modelRepo.save({ modelId, status: 'loading' })
 
     try {
-      const chatOpts: ChatOptions | undefined = isVisionModel(modelId)
-        ? { context_window_size: 6144 }
-        : undefined
-
-      const engine = await CreateMLCEngine(
-        modelId,
-        {
-          initProgressCallback: (report) => {
-            const progress = report.progress ?? 0
-            onProgress?.(progress)
-            void modelRepo.save({
-              modelId,
-              status: 'downloading',
-              downloadProgress: progress,
-              downloadedBytes: Math.floor(progress * (getModelInfo(modelId)?.sizeBytes ?? 0)),
-              totalBytes: getModelInfo(modelId)?.sizeBytes,
-            })
-          },
-        },
-        chatOpts,
-      )
+      const engine = await this.createEngine(modelId, onProgress)
 
       this.engine = engine
       this.currentModelId = modelId
@@ -130,12 +174,27 @@ export class LocalLLMService implements LLMService {
     }
   }
 
-  async unloadModel(): Promise<void> {
-    if (this.engine) {
+  private async unloadModelInternal(): Promise<void> {
+    if (!this.engine) return
+
+    try {
       await this.engine.unload()
+    } catch {
+      // Engine may already be disposed.
+    } finally {
       this.engine = null
       this.currentModelId = null
     }
+  }
+
+  async unloadModel(): Promise<void> {
+    await this.waitForGenerationToFinish()
+
+    if (this.loadPromise) {
+      await this.loadPromise
+    }
+
+    await this.unloadModelInternal()
   }
 
   isLoaded(): boolean {
@@ -154,18 +213,39 @@ export class LocalLLMService implements LLMService {
       throw new Error('MODEL_NOT_LOADED: El modelo no está cargado')
     }
 
+    this.acquireGenerationGate()
     try {
-      yield* this.generateStream(messages, options)
-    } catch (error) {
-      if (this.isRecoverableGpuError(error) && this.currentModelId) {
-        const modelId = this.currentModelId
-        await this.unloadModel()
-        await this.ensureModelLoaded(modelId)
+      try {
         yield* this.generateStream(messages, options)
-        return
+      } catch (error) {
+        if (this.isRecoverableGpuError(error) && this.currentModelId) {
+          const modelId = this.currentModelId
+          await this.reinitializeEngine(modelId)
+          yield* this.generateStream(messages, options)
+          return
+        }
+        throw error
       }
-      throw error
+    } finally {
+      this.releaseGeneration()
     }
+  }
+
+  private async reinitializeEngine(modelId: string): Promise<void> {
+    if (this.engine) {
+      try {
+        await this.engine.interruptGenerate()
+      } catch {
+        // Ignore interrupted or disposed engine.
+      }
+    }
+
+    await this.unloadModelInternal()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const engine = await this.createEngine(modelId)
+    this.engine = engine
+    this.currentModelId = modelId
   }
 
   private async *generateStream(
@@ -193,10 +273,20 @@ export class LocalLLMService implements LLMService {
       stream: true,
     })
 
-    for await (const chunk of chunks) {
-      if (this.abortController?.signal.aborted) break
-      const content = chunk.choices[0]?.delta?.content
-      if (content) yield content
+    try {
+      for await (const chunk of chunks) {
+        if (this.abortController?.signal.aborted) break
+        const content = chunk.choices[0]?.delta?.content
+        if (content) yield content
+      }
+    } finally {
+      if (this.abortController?.signal.aborted && this.engine) {
+        try {
+          await this.engine.interruptGenerate()
+        } catch {
+          // Ignore interrupted or disposed engine.
+        }
+      }
     }
   }
 
@@ -215,8 +305,15 @@ export class LocalLLMService implements LLMService {
     return getModelInfo(this.currentModelId) ?? null
   }
 
-  abort(): void {
+  async abort(): Promise<void> {
     this.abortController?.abort()
+    if (this.engine) {
+      try {
+        await this.engine.interruptGenerate()
+      } catch {
+        // Engine may already be disposed.
+      }
+    }
   }
 }
 

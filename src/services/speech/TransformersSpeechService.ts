@@ -44,6 +44,10 @@ export class TransformersSpeechService {
     const info = getSpeechModelInfo(modelId)
     if (!info) throw new Error('MODEL_NOT_SUPPORTED: Modelo de audio no encontrado')
 
+    if (this.transcriber && this.currentModelId !== modelId) {
+      await this.unload()
+    }
+
     await modelRepo.save({ modelId, status: 'loading' })
 
     try {

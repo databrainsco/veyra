@@ -6,6 +6,10 @@ export function formatUserError(error: unknown): string {
     return 'El modelo de IA no está cargado. Ve a Modelos y actívalo, o espera a que termine de cargar.'
   }
 
+  if (lower.includes('tokenizer') && lower.includes('already deleted')) {
+    return 'El modelo se descargó mientras generaba una respuesta. Espera a que termine o pulsa Detener antes de cambiar de modelo. Recarga la página si el error persiste.'
+  }
+
   if (lower.includes('gpubuffer') || lower.includes('mapasync') || lower.includes('device lost')) {
     return 'Error de GPU al generar la respuesta. Cierra otras pestañas, recarga la página e intenta de nuevo. En móvil, prueba un modelo más pequeño (Qwen 0.5B).'
   }

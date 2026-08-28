@@ -10,5 +10,5 @@ export interface LLMService {
     options?: GenerationOptions,
   ): AsyncIterable<string>
   getModelInfo(): ModelInfo | null
-  abort(): void
+  abort(): Promise<void>
 }
