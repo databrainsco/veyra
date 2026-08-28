@@ -12,6 +12,7 @@ import {
   getMaxInputTokens,
 } from '../../utils/generationProfile'
 import { detectDeviceCapabilities, isMobilePlatform } from '../../utils/device'
+import { VEYRA_SYSTEM_PROMPT } from '../../utils/systemPrompt'
 
 export class RAGService {
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
@@ -49,7 +50,7 @@ export class RAGService {
     }
 
     const built = buildRAGContext({
-      systemPrompt: 'Eres Veyra, una IA personal local. Responde en español.',
+      systemPrompt: VEYRA_SYSTEM_PROMPT,
       summary,
       ragResults,
       recentMessages,

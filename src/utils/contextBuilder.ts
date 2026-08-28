@@ -1,6 +1,7 @@
 import type { ChatMessage, ConversationMemory, SearchResult, SourceReference } from '../types'
 import { estimateTokens, truncateToTokenBudget } from './helpers'
 import { truncateMessagesToBudget } from './generationProfile'
+import { VEYRA_SYSTEM_PROMPT } from './systemPrompt'
 
 export interface ContextBuildOptions {
   systemPrompt: string
@@ -19,14 +20,9 @@ export interface BuiltContext {
   totalTokens: number
 }
 
-const DEFAULT_SYSTEM_PROMPT = `Eres Veyra, una IA personal que vive en el dispositivo del usuario.
-Responde de forma clara, útil y concisa en español.
-Cuando uses información de la memoria o documentos del usuario, indícalo naturalmente.
-Si no tienes información suficiente, dilo honestamente.`
-
 export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
   const {
-    systemPrompt = DEFAULT_SYSTEM_PROMPT,
+    systemPrompt = VEYRA_SYSTEM_PROMPT,
     summary,
     ragResults,
     recentMessages,

@@ -29,7 +29,7 @@ export default defineConfig({
         background_color: '#0a0a0f',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: base,
+        start_url: `${base}app`,
         scope: base,
         icons: [
           { src: `${base}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },

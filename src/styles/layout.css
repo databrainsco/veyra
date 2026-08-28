@@ -173,10 +173,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: 2px;
+  padding: 6px 4px;
   color: var(--text-muted);
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   min-width: 56px;
 }
 

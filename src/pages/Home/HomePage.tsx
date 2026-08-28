@@ -11,7 +11,7 @@ export function HomePage() {
     if (!settings.onboardingComplete) {
       navigate('/onboarding')
     } else {
-      navigate('/app/chat')
+      navigate('/app')
     }
   }
 

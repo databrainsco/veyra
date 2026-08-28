@@ -5,7 +5,7 @@ import { formatDeploymentVersion } from '../../utils/version'
 export function AppTopBar() {
   return (
     <header className="app-topbar">
-      <Link to="/" className="app-topbar-home" aria-label="Ir al inicio">
+      <Link to="/app" className="app-topbar-home" aria-label="Ir al menú">
         <HomeIcon />
         <span className="app-topbar-home-label">Inicio</span>
       </Link>

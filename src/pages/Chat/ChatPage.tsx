@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { conversationRepo } from '../../db/repositories/conversationRepository'
 import { messageRepo } from '../../db/repositories/messageRepository'
-import { settingsRepo } from '../../db/repositories/settingsRepository'
+import { modelRepo, settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
 import { modelSupportsImages } from '../../services/llm/models'
 import { getSpeechService } from '../../services/speech/TransformersSpeechService'
@@ -28,6 +28,7 @@ export function ChatPage() {
   const [modelLoaded, setModelLoaded] = useState(false)
   const [modelLoading, setModelLoading] = useState(false)
   const [modelLoadProgress, setModelLoadProgress] = useState(0)
+  const [modelLoadingMessage, setModelLoadingMessage] = useState('Cargando modelo...')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeModelId, setActiveModelId] = useState<string | null>(null)
   const [pendingImage, setPendingImage] = useState<{ name: string; dataUrl: string } | null>(null)
@@ -79,8 +80,16 @@ export function ChatPage() {
       return false
     }
 
+    const record = await modelRepo.get(settings.activeModelId)
+    const wasInstalled = Boolean(
+      record?.installedAt || record?.status === 'installed' || record?.status === 'active',
+    )
+
     setModelLoading(true)
     setModelLoadProgress(0)
+    setModelLoadingMessage(
+      wasInstalled ? 'Activando modelo desde caché...' : 'Descargando modelo por primera vez...',
+    )
     try {
       await llm.ensureModelLoaded(settings.activeModelId, (p) => setModelLoadProgress(p))
       setModelLoaded(true)
@@ -106,13 +115,16 @@ export function ChatPage() {
         const msgs = await messageRepo.getByConversation(first.id)
         setMessages(msgs)
       }
-      await loadModelIfNeeded()
+
       const settings = await settingsRepo.get()
       setActiveModelId(settings.activeModelId)
+      if (settings.activeModelId && getLLMService().isLoaded()) {
+        setModelLoaded(true)
+      }
     }
 
     void init()
-  }, [loadConversations, loadModelIfNeeded])
+  }, [loadConversations])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -479,7 +491,7 @@ export function ChatPage() {
                 style={{ width: `${modelLoadProgress * 100}%` }}
               />
             </div>
-            <span>Cargando modelo de IA...</span>
+            <span>{modelLoadingMessage}</span>
           </div>
         )}
 

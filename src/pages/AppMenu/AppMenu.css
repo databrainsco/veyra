@@ -1,0 +1,86 @@
+.app-menu {
+  padding: 24px 20px calc(24px + var(--safe-bottom));
+  overflow-y: auto;
+  height: 100%;
+}
+
+.app-menu-header {
+  margin-bottom: 20px;
+}
+
+.app-menu-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.app-menu-header p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.app-menu-model {
+  margin-bottom: 20px;
+  padding: 16px;
+}
+
+.app-menu-model-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.app-menu-model-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.app-menu-model-hint {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.app-menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-menu-card {
+  display: block;
+  padding: 18px 20px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.app-menu-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.app-menu-card h2 {
+  font-size: 1.0625rem;
+  margin-bottom: 6px;
+}
+
+.app-menu-card p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.app-menu-home-link {
+  display: inline-block;
+  margin-top: 24px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.app-menu-home-link:hover {
+  color: var(--accent);
+}

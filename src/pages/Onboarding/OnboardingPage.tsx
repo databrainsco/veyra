@@ -61,7 +61,7 @@ export function OnboardingPage() {
   }
 
   function handleFinish() {
-    navigate('/app/chat')
+    navigate('/app')
   }
 
   if (installed) {

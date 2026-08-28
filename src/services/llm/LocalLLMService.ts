@@ -172,7 +172,18 @@ export class LocalLLMService implements LLMService {
       await this.unloadModelInternal()
     }
 
-    await modelRepo.save({ modelId, status: 'loading' })
+    const existing = await modelRepo.get(modelId)
+    const wasInstalled = Boolean(
+      existing?.installedAt ||
+        existing?.status === 'installed' ||
+        existing?.status === 'active',
+    )
+
+    await modelRepo.save({
+      modelId,
+      status: wasInstalled ? 'loading' : 'downloading',
+      installedAt: existing?.installedAt,
+    })
 
     try {
       const engine = await this.createEngine(modelId, onProgress)
@@ -183,7 +194,7 @@ export class LocalLLMService implements LLMService {
       await modelRepo.save({
         modelId,
         status: 'active',
-        installedAt: Date.now(),
+        installedAt: existing?.installedAt ?? Date.now(),
         downloadProgress: 1,
       })
     } catch (error) {

@@ -4,30 +4,31 @@ import { formatDeploymentVersion, formatBuildDateTime, getCommitUrl, getShortBui
 import '../../styles/layout.css'
 
 const navItems = [
-  { to: '/app/chat', label: 'Chat', icon: '💬' },
-  { to: '/app/memory', label: 'Memoria', icon: '🧠' },
-  { to: '/app/library', label: 'Biblioteca', icon: '📚' },
-  { to: '/app/models', label: 'Modelos', icon: '⚡' },
-  { to: '/app/settings', label: 'Configuración', icon: '⚙️' },
+  { to: '/app', label: 'Inicio' },
+  { to: '/app/chat', label: 'Chat' },
+  { to: '/app/memory', label: 'Memoria' },
+  { to: '/app/library', label: 'Biblioteca' },
+  { to: '/app/models', label: 'Modelos' },
+  { to: '/app/settings', label: 'Configuración' },
 ]
 
 export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <Link to="/" className="sidebar-home-link" aria-label="Ir al inicio">
+        <Link to="/app" className="sidebar-home-link" aria-label="Ir al menú">
           <HomeIcon />
         </Link>
-        <Link to="/" className="sidebar-logo">VEYRA</Link>
+        <Link to="/app" className="sidebar-logo">VEYRA</Link>
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
+            end={item.to === '/app'}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <span>{item.icon}</span>
             <span>{item.label}</span>
           </NavLink>
         ))}
@@ -45,9 +46,9 @@ export function MobileNav() {
           <NavLink
             key={item.to}
             to={item.to}
+            end={item.to === '/app'}
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
           >
-            <span style={{ fontSize: '1.25rem' }}>{item.icon}</span>
             <span>{item.label}</span>
           </NavLink>
         ))}
