@@ -5,12 +5,9 @@ import { formatBytes } from '../../utils/helpers'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
 import type { ModelCompatibility } from '../../utils/device'
 import type { LLMCatalogEntry } from '../../services/llm/models'
-import type { SpeechCatalogEntry } from '../../services/speech/speechModels'
-
-type CatalogModel = LLMCatalogEntry | SpeechCatalogEntry
 
 interface ModelCardProps {
-  model: CatalogModel
+  model: LLMCatalogEntry
   status: InstalledModel['status']
   compat: ModelCompatibility
   capabilities: DeviceCapabilities | null
@@ -104,17 +101,13 @@ export function ModelCard({
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Tamaño:</span> {formatBytes(model.sizeBytes)}
         </div>
-        {model.category === 'llm' && (
-          <>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Cuantización:</span> {model.quantization}
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>Contexto:</span>{' '}
-              {model.contextLength.toLocaleString()}
-            </div>
-          </>
-        )}
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>Cuantización:</span> {model.quantization}
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>Contexto:</span>{' '}
+          {model.contextLength.toLocaleString()}
+        </div>
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Backend:</span> {model.backend.toUpperCase()}
         </div>

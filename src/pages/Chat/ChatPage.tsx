@@ -4,7 +4,6 @@ import { messageRepo } from '../../db/repositories/messageRepository'
 import { modelRepo, settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
 import { modelSupportsImages } from '../../services/llm/models'
-import { getSpeechService } from '../../services/speech/TransformersSpeechService'
 import { ragService } from '../../services/rag/ragService'
 import { MarkdownRenderer } from '../../components/chat/MarkdownRenderer'
 import { SourceList } from '../../components/chat/SourceList'
@@ -18,7 +17,6 @@ import {
   StopIcon,
   MenuIcon,
   ImageIcon,
-  AudioIcon,
   CloseIcon,
 } from '../../components/chat/ChatIcons'
 import { generateId } from '../../utils/helpers'
@@ -26,7 +24,7 @@ import { formatUserError, isGpuError } from '../../utils/errors'
 import { detectDeviceCapabilities, isModelCompatible, getRecommendedModelId } from '../../utils/device'
 import { applyDeviceOptimizedSettings } from '../../utils/deviceSettings'
 import { getModelInfo } from '../../services/llm/models'
-import { fileToDataUrl, validateAudioFile, validateImageFile } from '../../utils/files'
+import { fileToDataUrl, validateImageFile } from '../../utils/files'
 import type { Conversation, ChatMessage, MessageAttachment } from '../../types'
 import './Chat.css'
 
@@ -44,14 +42,11 @@ export function ChatPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [activeModelId, setActiveModelId] = useState<string | null>(null)
   const [pendingImage, setPendingImage] = useState<{ name: string; dataUrl: string } | null>(null)
-  const [pendingAudio, setPendingAudio] = useState<File | null>(null)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
-  const [transcribing, setTranscribing] = useState(false)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
-  const audioInputRef = useRef<HTMLInputElement>(null)
   const initDone = useRef(false)
 
   const loadConversations = useCallback(async () => {
@@ -163,6 +158,9 @@ export function ChatPage() {
     setActiveConversation(conv)
     const msgs = await messageRepo.getByConversation(conv.id)
     setMessages(msgs)
+    if (msgs.length >= 2) {
+      void ragService.ensureConversationIndexed(conv.id, conv.title, msgs)
+    }
   }
 
   async function renameConversation(conv: Conversation, title: string) {
@@ -227,6 +225,7 @@ export function ChatPage() {
         conv.id,
         userMsg.content,
         updatedMessages,
+        conv.title,
       )
 
       const chatMessages: ChatMessage[] = contextMessages.map((m, i) => ({
@@ -355,30 +354,13 @@ export function ChatPage() {
 
     const dataUrl = await fileToDataUrl(file)
     setPendingImage({ name: file.name, dataUrl })
-    setPendingAudio(null)
     setAttachmentError(null)
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
-  function handleAudioSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const error = validateAudioFile(file)
-    if (error) {
-      setAttachmentError(error)
-      return
-    }
-
-    setPendingAudio(file)
-    setPendingImage(null)
-    setAttachmentError(null)
-    if (audioInputRef.current) audioInputRef.current.value = ''
-  }
-
   async function sendMessage() {
-    const hasContent = input.trim() || pendingImage || pendingAudio
-    if (!hasContent || isGenerating || transcribing) return
+    const hasContent = input.trim() || pendingImage
+    if (!hasContent || isGenerating) return
 
     let conv = activeConversation
     if (!conv) {
@@ -401,43 +383,6 @@ export function ChatPage() {
       }
     }
 
-    if (pendingAudio) {
-      setTranscribing(true)
-      try {
-        const settings = await settingsRepo.get()
-        if (!settings.activeSpeechModelId) {
-          throw new Error('Descarga un modelo de audio (Whisper) en Modelos para transcribir voz.')
-        }
-        const speech = getSpeechService()
-        if (!speech.isLoaded() || speech.getActiveModelId() !== settings.activeSpeechModelId) {
-          await speech.loadModel(settings.activeSpeechModelId)
-        }
-        const transcription = await speech.transcribe(pendingAudio)
-        attachments.push({
-          type: 'audio',
-          name: pendingAudio.name,
-          transcription,
-        })
-        messageContent = messageContent
-          ? `${messageContent}\n\n[Audio transcrito]: ${transcription}`
-          : transcription
-      } catch (error) {
-        const errorMsg: ChatMessage = {
-          id: generateId(),
-          conversationId: conv.id,
-          role: 'assistant',
-          content: formatUserError(error),
-          createdAt: Date.now(),
-        }
-        await messageRepo.create(errorMsg)
-        setMessages((prev) => [...prev, errorMsg])
-        setTranscribing(false)
-        return
-      } finally {
-        setTranscribing(false)
-      }
-    }
-
     const userMsg: ChatMessage = {
       id: generateId(),
       conversationId: conv.id,
@@ -453,7 +398,6 @@ export function ChatPage() {
     setMessages(updatedMessages)
     setInput('')
     setPendingImage(null)
-    setPendingAudio(null)
     setAttachmentError(null)
     setAttachMenuOpen(false)
 
@@ -495,7 +439,7 @@ export function ChatPage() {
   }
 
   const activeModelName = activeModelId ? getModelInfo(activeModelId)?.name : null
-  const canSend = (input.trim() || pendingImage || pendingAudio) && !modelLoading && !transcribing
+  const canSend = (input.trim() || pendingImage) && !modelLoading
 
   return (
     <div className="chat-page">
@@ -659,25 +603,15 @@ export function ChatPage() {
             </div>
 
             <div className="chat-input-area">
-              {(pendingImage || pendingAudio) && (
+              {pendingImage && (
                 <div className="chat-attachment-preview">
-                  {pendingImage && (
-                    <div className="attachment-chip">
-                      <img src={pendingImage.dataUrl} alt="" className="attachment-thumb" />
-                      <span>{pendingImage.name}</span>
-                      <button className="icon-btn attachment-remove" onClick={() => setPendingImage(null)} aria-label="Quitar imagen">
-                        <CloseIcon size={14} />
-                      </button>
-                    </div>
-                  )}
-                  {pendingAudio && (
-                    <div className="attachment-chip">
-                      <span>{pendingAudio.name}</span>
-                      <button className="icon-btn attachment-remove" onClick={() => setPendingAudio(null)} aria-label="Quitar audio">
-                        <CloseIcon size={14} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="attachment-chip">
+                    <img src={pendingImage.dataUrl} alt="" className="attachment-thumb" />
+                    <span>{pendingImage.name}</span>
+                    <button className="icon-btn attachment-remove" onClick={() => setPendingImage(null)} aria-label="Quitar imagen">
+                      <CloseIcon size={14} />
+                    </button>
+                  </div>
                 </div>
               )}
               {attachmentError && (
@@ -689,7 +623,7 @@ export function ChatPage() {
                     type="button"
                     className="icon-btn chat-attach-toggle"
                     onClick={() => setAttachMenuOpen((open) => !open)}
-                    disabled={isGenerating || modelLoading || transcribing}
+                    disabled={isGenerating || modelLoading}
                     aria-label="Adjuntar"
                     aria-expanded={attachMenuOpen}
                   >
@@ -704,22 +638,10 @@ export function ChatPage() {
                           imageInputRef.current?.click()
                           setAttachMenuOpen(false)
                         }}
-                        disabled={isGenerating || modelLoading || transcribing}
+                        disabled={isGenerating || modelLoading}
                       >
                         <ImageIcon />
                         <span>Imagen</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-attach-option"
-                        onClick={() => {
-                          audioInputRef.current?.click()
-                          setAttachMenuOpen(false)
-                        }}
-                        disabled={isGenerating || modelLoading || transcribing}
-                      >
-                        <AudioIcon />
-                        <span>Audio</span>
                       </button>
                     </div>
                   )}
@@ -731,27 +653,18 @@ export function ChatPage() {
                   hidden
                   onChange={handleImageSelect}
                 />
-                <input
-                  ref={audioInputRef}
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
-                  hidden
-                  onChange={handleAudioSelect}
-                />
                 <textarea
                   className="chat-input"
                   placeholder={
-                    transcribing
-                      ? 'Transcribiendo audio...'
-                      : modelLoading
-                        ? 'Cargando modelo...'
-                        : 'Escribe un mensaje...'
+                    modelLoading
+                      ? 'Cargando modelo...'
+                      : 'Escribe un mensaje...'
                   }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  disabled={isGenerating || modelLoading || transcribing}
+                  disabled={isGenerating || modelLoading}
                 />
                 {isGenerating ? (
                   <button

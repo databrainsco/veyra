@@ -1,15 +1,15 @@
 import type { ChatMessage, ConversationMemory, SearchResult, SourceReference } from '../types'
-import { estimateTokens, truncateToTokenBudget } from './helpers'
+import { estimateTokens } from './helpers'
 import { truncateMessagesToBudget } from './generationProfile'
 import { VEYRA_SYSTEM_PROMPT } from './systemPrompt'
 
 export interface ContextBuildOptions {
   systemPrompt: string
   summary?: ConversationMemory
-  ragResults: SearchResult[]
+  conversationRagResults: SearchResult[]
+  globalRagResults: SearchResult[]
   recentMessages: ChatMessage[]
   currentQuestion: string
-  maxRagTokens: number
   maxRecentMessages?: number
   maxInputTokens?: number
 }
@@ -20,30 +20,14 @@ export interface BuiltContext {
   totalTokens: number
 }
 
-export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
-  const {
-    systemPrompt = VEYRA_SYSTEM_PROMPT,
-    summary,
-    ragResults,
-    recentMessages,
-    currentQuestion,
-    maxRagTokens,
-    maxRecentMessages = 10,
-    maxInputTokens,
-  } = options
-
-  const sources: SourceReference[] = []
-  let ragContext = ''
-  let ragTokens = 0
-
-  for (const result of ragResults) {
+function appendRagSection(
+  results: SearchResult[],
+  sources: SourceReference[],
+): string {
+  let section = ''
+  for (const result of results) {
     const chunk = result.chunk
-    const chunkTokens = estimateTokens(chunk.text)
-    if (ragTokens + chunkTokens > maxRagTokens) break
-
-    ragContext += `\n- ${chunk.text}`
-    ragTokens += chunkTokens
-
+    section += `\n- ${chunk.text}`
     sources.push({
       type: chunk.sourceType,
       id: chunk.sourceId,
@@ -53,15 +37,34 @@ export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
       excerpt: chunk.text.slice(0, 150),
     })
   }
+  return section
+}
 
+export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
+  const {
+    systemPrompt = VEYRA_SYSTEM_PROMPT,
+    summary,
+    conversationRagResults,
+    globalRagResults,
+    recentMessages,
+    currentQuestion,
+    maxRecentMessages = 10,
+    maxInputTokens,
+  } = options
+
+  const sources: SourceReference[] = []
   let systemContent = systemPrompt
 
   if (summary?.summary) {
     systemContent += `\n\nResumen de la conversación:\n${summary.summary}`
   }
 
-  if (ragContext) {
-    systemContent += `\n\nMemoria relevante:${ragContext}`
+  if (conversationRagResults.length > 0) {
+    systemContent += `\n\nHistorial relevante de esta conversación (úsalo para recordar lo que el usuario ya preguntó o acordó):${appendRagSection(conversationRagResults, sources)}`
+  }
+
+  if (globalRagResults.length > 0) {
+    systemContent += `\n\nMemoria de documentos y otras conversaciones:${appendRagSection(globalRagResults, sources)}`
   }
 
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -69,13 +72,19 @@ export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
   ]
 
   const recent = recentMessages.slice(-maxRecentMessages)
+  const lastMessage = recent[recent.length - 1]
+  const lastIsCurrentQuestion =
+    lastMessage?.role === 'user' && lastMessage.content === currentQuestion
+
   for (const msg of recent) {
     if (msg.role === 'user' || msg.role === 'assistant') {
       messages.push({ role: msg.role, content: msg.content })
     }
   }
 
-  messages.push({ role: 'user', content: currentQuestion })
+  if (!lastIsCurrentQuestion) {
+    messages.push({ role: 'user', content: currentQuestion })
+  }
 
   let finalMessages = messages
   if (maxInputTokens) {
@@ -100,7 +109,7 @@ export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
 export function buildSummaryPrompt(messages: ChatMessage[]): string {
   const conversationText = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => `${m.role}: ${truncateToTokenBudget(m.content, 500)}`)
+    .map((m) => `${m.role}: ${m.content.slice(0, 2000)}`)
     .join('\n')
 
   return `Resume la siguiente conversación de forma concisa, capturando los puntos clave y decisiones importantes:\n\n${conversationText}`

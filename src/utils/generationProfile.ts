@@ -18,11 +18,27 @@ export function computeGenerationProfile(capabilities: DeviceCapabilities): Gene
   const memory = getEffectiveMemoryGB(capabilities)
 
   if (isMobile || memory < 4) {
+    if (memory >= 8) {
+      return {
+        contextWindowSize: 2048,
+        maxOutputTokens: 512,
+        maxRagTokens: 600,
+        maxRecentMessages: 6,
+      }
+    }
+    if (memory >= 6) {
+      return {
+        contextWindowSize: 1536,
+        maxOutputTokens: 384,
+        maxRagTokens: 500,
+        maxRecentMessages: 5,
+      }
+    }
     return {
       contextWindowSize: 1024,
       maxOutputTokens: 256,
-      maxRagTokens: 0,
-      maxRecentMessages: 2,
+      maxRagTokens: 400,
+      maxRecentMessages: 4,
     }
   }
 

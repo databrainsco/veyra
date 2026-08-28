@@ -119,16 +119,224 @@ export const MODEL_GUIDES: Record<string, ModelGuide> = {
       'Conversación casual',
     ],
     limitations: [
-      'Solo ~0.5B parámetros: calidad limitada frente a modelos grandes',
-      'En móvil Veyra reduce contexto (~1024 tokens) y respuestas (~256 tokens)',
-      'RAG y memoria desactivados en móvil por rendimiento',
-      'Puede negarse o dar respuestas vagas en temas complejos (seguridad, legal, etc.)',
-      'No apto para documentos largos ni conversaciones extensas',
+      'Solo ~0.5B parámetros: calidad limitada frente a modelos de 1.5B–4B',
+      'En móvil Veyra reduce contexto y respuestas si tu RAM es baja',
+      'Puede dar respuestas vagas en temas complejos',
+      'No apto para documentos largos ni conversaciones muy extensas',
     ],
     tips: [
-      'Único modelo de chat recomendado en móvil por compatibilidad',
+      'En móviles modestos es el más rápido; en flagships prueba Qwen 3.5 2B o 4B',
       'Haz preguntas cortas y directas',
-      'Para trabajo serio (código, análisis), usa un PC con Llama 3B o Phi 3.5',
+      'Para trabajo serio en móvil, usa modelos de 2B–4B si tu RAM lo permite',
+    ],
+  },
+  'Qwen3.5-4B-q4f16_1-MLC': {
+    overview:
+      'El modelo más capaz disponible solo para móvil en Veyra. Pensado para flagships como el S25 Ultra (~8 GB reportados por el navegador). Mejor razonamiento y respuestas más completas que modelos de 0.5B–2B.',
+    useCases: [
+      'Conversaciones largas con mejor seguimiento de contexto',
+      'Explicaciones detalladas y resúmenes',
+      'Programación intermedia y revisión de código pegado',
+      'Redacción, ideas y planificación',
+      'Preguntas técnicas en español',
+    ],
+    knowledgeAreas: [
+      'Conocimiento general amplio',
+      'Razonamiento y comparaciones',
+      'Código en varios lenguajes',
+      'Multilingüe (español con buena fluidez)',
+    ],
+    limitations: [
+      'Solo móvil: no aparece en escritorio',
+      'Descarga ~2.5 GB; la primera carga puede tardar',
+      'Más lento que 0.5B–2B; puede calentar el dispositivo',
+      'Sin internet ni datos en tiempo real',
+    ],
+    tips: [
+      'Recomendado en S25 Ultra y móviles con 8 GB+ RAM reportada',
+      'Veyra sube contexto y tokens de respuesta en gama alta',
+      'Si va lento, prueba Qwen 3.5 2B como alternativa más ligera',
+    ],
+  },
+  'Qwen3.5-2B-q4f16_1-MLC': {
+    overview:
+      'Excelente equilibrio calidad/velocidad en móviles potentes (6 GB+). Generación Qwen 3.5 más reciente que Qwen 2.5; suele superar a modelos más viejos de tamaño similar.',
+    useCases: [
+      'Chat diario con respuestas de mejor calidad',
+      'Explicaciones y resúmenes moderados',
+      'Ayuda con código y debugging básico-intermedio',
+      'Multilingüe y redacción',
+    ],
+    knowledgeAreas: [
+      'Cultura general y explicaciones',
+      'Español e inglés',
+      'Programación práctica',
+      'Razonamiento ligero a medio',
+    ],
+    limitations: [
+      'Solo móvil',
+      'No sustituye un PC con Llama 3B para tareas muy largas',
+      'Primera descarga de ~1.4 GB',
+    ],
+    tips: [
+      'Buena opción si Qwen 3.5 4B va lento en tu navegador',
+      'Combina con memoria de conversación (RAG del chat) en Veyra',
+    ],
+  },
+  'Qwen2.5-3B-Instruct-q4f16_1-MLC': {
+    overview:
+      'Modelo instruct de 3B parámetros solo para móvil. Más capacidad que 1.5B; buen candidato si quieres máxima calidad en 6 GB sin llegar al 4B.',
+    useCases: [
+      'Chat avanzado y seguimiento de contexto',
+      'Código y explicaciones técnicas',
+      'Resúmenes de textos pegados en el chat',
+      'Planificación y análisis de ideas',
+    ],
+    knowledgeAreas: [
+      'Conocimiento general',
+      'Código en varios lenguajes',
+      'Razonamiento estructurado',
+      'Español fluido',
+    ],
+    limitations: [
+      'Solo móvil; descarga ~1.9 GB',
+      'Puede ser más lento que Qwen 3.5 2B en algunos dispositivos',
+      'Sin acceso a internet',
+    ],
+    tips: [
+      'Prueba este o Qwen 3.5 2B y quédate con el que mejor equilibre velocidad y calidad',
+    ],
+  },
+  'Hermes-3-Llama-3.2-3B-q4f16_1-MLC': {
+    overview:
+      'Variante Hermes 3 sobre Llama 3.2 3B, afinada para seguir instrucciones y conversación natural en móvil potente.',
+    useCases: [
+      'Chat con tono conversacional',
+      'Instrucciones paso a paso',
+      'Escritura creativa ligera',
+      'Código y preguntas técnicas',
+    ],
+    knowledgeAreas: [
+      'Diálogo e instrucciones',
+      'Conocimiento general',
+      'Programación básica-intermedia',
+    ],
+    limitations: [
+      'Solo móvil con 6 GB+ RAM',
+      'Modelo más pesado (~2.1 GB)',
+    ],
+    tips: [
+      'Útil si prefieres el estilo Llama/Hermes frente a Qwen',
+    ],
+  },
+  'gemma-2-2b-it-q4f16_1-MLC': {
+    overview:
+      'Gemma 2 de Google, 2B parámetros, optimizado para móvil de gama alta. Buena redacción y respuestas claras en español.',
+    useCases: [
+      'Redacción y corrección de textos',
+      'Preguntas generales',
+      'Explicaciones sencillas',
+      'Chat cotidiano',
+    ],
+    knowledgeAreas: [
+      'Redacción en varios idiomas',
+      'Conocimiento general',
+      'Razonamiento moderado',
+    ],
+    limitations: [
+      'Solo móvil 6 GB+',
+      'Menos orientado a código que Phi o Qwen 3B',
+    ],
+    tips: [
+      'Buena alternativa si ya conoces el ecosistema Gemma',
+    ],
+  },
+  'Qwen2.5-1.5B-Instruct-q4f16_1-MLC': {
+    overview:
+      'Salto de calidad respecto a 0.5B para móviles con 4 GB RAM. Equilibrio entre tamaño y capacidad.',
+    useCases: [
+      'Chat general',
+      'Explicaciones breves-medianas',
+      'Código básico',
+      'Multilingüe',
+    ],
+    knowledgeAreas: [
+      'Hechos generales',
+      'Español e inglés',
+      'Snippets de código',
+    ],
+    limitations: [
+      'Por debajo de 2B–4B en temas complejos',
+      'Contexto reducido en móvil (~1024 tokens en Veyra si RAM < 6 GB)',
+    ],
+    tips: [
+      'Recomendado si tu móvil reporta ~4 GB y no puedes cargar modelos de 6 GB+',
+    ],
+  },
+  'SmolLM2-1.7B-Instruct-q4f16_1-MLC': {
+    overview:
+      'Modelo eficiente de Hugging Face (~1.7B). Buen rendimiento en móviles de gama media-alta con 4 GB+.',
+    useCases: [
+      'Instrucciones y tareas cortas',
+      'Razonamiento ligero',
+      'Código básico',
+      'Chat rápido con mejor calidad que 0.5B',
+    ],
+    knowledgeAreas: [
+      'Seguimiento de instrucciones',
+      'Conocimiento general compacto',
+      'Código introductorio',
+    ],
+    limitations: [
+      'No alcanza la profundidad de 3B–4B',
+      'Requiere 4 GB RAM móvil',
+    ],
+    tips: [
+      'Compara con Qwen 2.5 1.5B en tu dispositivo y elige el más fluido',
+    ],
+  },
+  'gemma3-1b-it-q4f16_1-MLC': {
+    overview:
+      'Gemma 3 compacto (~1B). Mejor comprensión que 0.5B sin exigir un flagship.',
+    useCases: [
+      'Chat diario',
+      'Respuestas claras en español',
+      'Preguntas cortas',
+      'Definiciones',
+    ],
+    knowledgeAreas: [
+      'Redacción clara',
+      'Multilingüe básico',
+      'Conocimiento general ligero',
+    ],
+    limitations: [
+      '3 GB RAM mínimo',
+      'Temas muy técnicos o largos: mejor 1.5B+',
+    ],
+    tips: [
+      'Buen paso intermedio entre 0.5B y 1.5B',
+    ],
+  },
+  'Qwen3.5-0.8B-q4f16_1-MLC': {
+    overview:
+      'Sucesor ligero de la familia Qwen 3.5. Mejor que 0.5B en comprensión manteniendo velocidad en móviles de 3 GB+.',
+    useCases: [
+      'Consultas rápidas',
+      'Definiciones y listas',
+      'Chat casual',
+      'Traducciones simples',
+    ],
+    knowledgeAreas: [
+      'Hechos generales básicos',
+      'Español e inglés',
+      'Respuestas breves',
+    ],
+    limitations: [
+      'No para análisis profundos ni documentos largos',
+      'Por debajo de modelos 1.5B+ en calidad',
+    ],
+    tips: [
+      'Ideal si 0.5B se queda corto pero no tienes RAM para 1.5B',
     ],
   },
   'Phi-3.5-vision-instruct-q4f16_1-MLC': {
@@ -157,54 +365,6 @@ export const MODEL_GUIDES: Record<string, ModelGuide> = {
       'Actívalo en Modelos y adjunta imagen con el botón + en Chat',
       'Pregunta concreta: “¿qué error muestra esta captura?” funciona mejor que “analiza”',
       'Para solo texto sin imágenes, un modelo más ligero puede ser más rápido',
-    ],
-  },
-  'whisper-tiny': {
-    overview:
-      'Modelo de voz a texto (speech-to-text). Transcribe audio que adjuntas en el chat a texto en español, inglés y otros idiomas. No genera respuestas: solo convierte audio en texto.',
-    useCases: [
-      'Transcribir notas de voz',
-      'Convertir grabaciones cortas a texto',
-      'Dictar mensajes para luego enviarlos al chat',
-      'Transcribir clips en español o inglés',
-    ],
-    knowledgeAreas: [
-      'Reconocimiento de voz en múltiples idiomas',
-      'Audio claro y sin mucho ruido de fondo',
-    ],
-    limitations: [
-      'No responde preguntas: solo transcribe',
-      'Calidad menor que Whisper Base en audio difícil',
-      'Archivos muy largos pueden tardar o truncarse',
-      'Acentos fuertes o mucho ruido reducen precisión',
-    ],
-    tips: [
-      'Descárgalo junto con un modelo de chat (Qwen en móvil, Llama en PC)',
-      'Graba en ambiente silencioso para mejores resultados',
-      'Si necesitas más precisión, prueba Whisper Base',
-    ],
-  },
-  'whisper-base': {
-    overview:
-      'Versión más precisa de Whisper para transcripción local. Mejor que Tiny en audio con ruido, varios hablantes o vocabulario técnico.',
-    useCases: [
-      'Transcripciones más fiables de entrevistas o reuniones',
-      'Dictado con terminología técnica',
-      'Audio con algo de ruido de fondo',
-      'Notas de voz donde la exactitud importa',
-    ],
-    knowledgeAreas: [
-      'Voz a texto en español, inglés y otros idiomas',
-      'Audio de calidad media',
-    ],
-    limitations: [
-      'Solo transcribe; no chatea ni analiza el contenido por sí solo',
-      'Archivo más grande que Tiny (~150 MB)',
-      'Audio muy largo consume tiempo y memoria',
-    ],
-    tips: [
-      'Tras transcribir, el texto se envía al modelo de chat para resumir o analizar',
-      'En móvil funciona, pero clips cortos dan mejor experiencia',
     ],
   },
 }
@@ -258,18 +418,11 @@ export function getVeyraLimitsForModel(
 
     rows.push({
       label: 'Móvil',
-      value: model.deviceRequirements.mobileSupported
-        ? 'Compatible'
-        : 'No compatible (solo escritorio)',
-    })
-  } else {
-    rows.push({
-      label: 'Función',
-      value: 'Transcripción de audio a texto en el chat',
-    })
-    rows.push({
-      label: 'Móvil',
-      value: model.deviceRequirements.mobileSupported ? 'Compatible' : 'No recomendado',
+      value: model.deviceRequirements.mobileOnly
+        ? 'Solo móvil'
+        : model.deviceRequirements.mobileSupported
+          ? 'Compatible'
+          : 'No compatible (solo escritorio)',
     })
   }
 

@@ -96,6 +96,8 @@ export interface ModelInfo {
   deviceRequirements: {
     minMemoryGB: number
     mobileSupported: boolean
+    /** Solo aparece en la lista de modelos en móvil (gama alta). */
+    mobileOnly?: boolean
     requiresWebGPU: boolean
   }
 }

@@ -2,6 +2,7 @@ import type { AppSettings } from '../types'
 import { settingsRepo } from '../db/repositories/settingsRepository'
 import {
   detectDeviceCapabilities,
+  getEffectiveMemoryGB,
   getRecommendedModelId,
   isMobilePlatform,
   isModelCompatible,
@@ -21,10 +22,18 @@ export async function applyDeviceOptimizedSettings(): Promise<AppSettings> {
     updates.ragEnabled = false
   }
   if (settings.maxTokens > 256) {
-    updates.maxTokens = 256
+    const memory = getEffectiveMemoryGB(capabilities)
+    const maxAllowed = memory >= 8 ? 512 : memory >= 6 ? 384 : 256
+    if (settings.maxTokens > maxAllowed) {
+      updates.maxTokens = maxAllowed
+    }
   }
-  if (settings.ragTokenBudget > 0) {
-    updates.ragTokenBudget = 0
+  if (settings.ragTokenBudget > 400) {
+    const memory = getEffectiveMemoryGB(capabilities)
+    const maxRag = memory >= 8 ? 600 : memory >= 6 ? 500 : 400
+    if (settings.ragTokenBudget > maxRag) {
+      updates.ragTokenBudget = maxRag
+    }
   }
 
   if (settings.activeModelId && !isModelCompatible(settings.activeModelId, capabilities).compatible) {

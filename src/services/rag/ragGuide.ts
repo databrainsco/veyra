@@ -18,7 +18,7 @@ export interface RagGuide {
 
 export const RAG_GUIDE: RagGuide = {
   overview:
-    'RAG (Retrieval-Augmented Generation) permite que Veyra busque en tu memoria local — conversaciones pasadas y documentos — fragmentos relevantes y los use como contexto al responder en el chat. Todo ocurre en tu dispositivo.',
+    'RAG (Retrieval-Augmented Generation) permite que Veyra busque en tu memoria local — conversaciones pasadas y documentos — fragmentos relevantes y los use como contexto al responder en el chat. Cada conversación también indexa su propio historial automáticamente, así el modelo recuerda lo que ya preguntaste en ese chat.',
   whatToIndex: {
     title: 'Qué puedes indexar (ejemplos)',
     items: [
@@ -43,6 +43,7 @@ export const RAG_GUIDE: RagGuide = {
   helpsWith: {
     title: 'Hasta dónde te puede ayudar',
     items: [
+      'Recuperar lo que ya dijiste en el mismo chat (memoria del hilo)',
       'Recuperar información de tus propios datos sin buscar manualmente',
       'Responder con base en documentos largos que no caben en un solo mensaje',
       'Recordar detalles de conversaciones antiguas (fechas, decisiones, nombres)',
@@ -54,8 +55,8 @@ export const RAG_GUIDE: RagGuide = {
   limitations: {
     title: 'Qué no hace / limitaciones',
     items: [
+      'En móvil: memoria del chat activo (sin documentos ni otras conversaciones)',
       'No sustituye Google ni bases de datos en vivo (CVEs, noticias, precios actuales)',
-      'En móvil RAG está desactivado por rendimiento; usa escritorio para memoria semántica',
       'Solo PDF y TXT en Biblioteca; no Word, Excel ni imágenes sueltas',
       'PDFs escaneados sin capa de texto (solo imagen) no se leen bien',
       'La calidad depende del modelo de chat activo y del tamaño del contexto',
@@ -66,7 +67,8 @@ export const RAG_GUIDE: RagGuide = {
   tips: {
     title: 'Consejos para mejores resultados',
     items: [
-      'Activa «RAG activado» en Configuración (escritorio)',
+      'El chat indexa solo tras unos mensajes; espera un momento en hilos largos',
+      'Activa «RAG activado» en Configuración (escritorio) para incluir Biblioteca y otros chats',
       'Sube documentos claros y con texto legible; nombra los archivos de forma descriptiva',
       'Haz preguntas concretas mencionando el tema o el documento si lo recuerdas',
       'Tras subir un PDF, espera a que diga «Indexado» antes de preguntar',
@@ -88,19 +90,28 @@ export function getRagLimits(
   const isMobile = capabilities ? isMobilePlatform(capabilities) : false
   const profile = capabilities ? computeGenerationProfile(capabilities) : null
   const ragActive = Boolean(settings?.ragEnabled) && !isMobile
+  const chatMemoryActive = true
 
   const rows: RagLimitRow[] = [
     {
-      label: 'Estado en tu dispositivo',
+      label: 'Memoria del chat',
+      value: chatMemoryActive
+        ? 'Activa (indexa este hilo automáticamente)'
+        : 'Desactivada',
+    },
+    {
+      label: 'RAG global (documentos)',
       value: isMobile
-        ? 'Desactivado en móvil (solo escritorio)'
+        ? 'Solo en escritorio'
         : settings?.ragEnabled
           ? 'Activado'
           : 'Desactivado en ajustes',
     },
     {
       label: 'Fuentes de memoria',
-      value: 'Conversaciones + documentos en Biblioteca',
+      value: isMobile
+        ? 'Solo el chat actual'
+        : 'Chat actual + documentos + otras conversaciones',
     },
     {
       label: 'Formatos en Biblioteca',
@@ -117,17 +128,24 @@ export function getRagLimits(
     )
   }
 
-  if (profile && ragActive) {
+  if (profile) {
     rows.push(
       {
-        label: 'RAG efectivo en chat',
-        value: `Hasta ${profile.maxRagTokens} tokens de contexto recuperado`,
+        label: 'Memoria del chat en contexto',
+        value: `Hasta ${Math.min(isMobile ? 400 : profile.maxRagTokens, settings?.ragTokenBudget ?? profile.maxRagTokens)} tokens recuperados`,
       },
       {
         label: 'Mensajes recientes',
         value: `~${profile.maxRecentMessages} además de la memoria buscada`,
       },
     )
+  }
+
+  if (profile && ragActive) {
+    rows.push({
+      label: 'RAG de documentos',
+      value: `Hasta ${profile.maxRagTokens} tokens de contexto recuperado`,
+    })
   }
 
   return rows

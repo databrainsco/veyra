@@ -60,8 +60,9 @@ export function MemoryPage() {
       <div className="card">
         <h3 style={{ marginBottom: 12 }}>Tu memoria</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6 }}>
-          Veyra indexa automáticamente tus conversaciones y documentos para poder recuperar
-          información relevante cuando la necesites. Todo se almacena localmente en tu dispositivo.
+          Veyra indexa automáticamente cada conversación para que el chat recuerde lo que ya
+          preguntaste en ese hilo. En escritorio, con RAG activado, también busca en documentos y
+          otras conversaciones. Todo se almacena localmente en tu dispositivo.
         </p>
         <div style={{ marginTop: 16, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
           Última indexación: {formatRelativeTime(stats.lastIndexed)}

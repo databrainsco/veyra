@@ -16,13 +16,3 @@ export function validateImageFile(file: File): string | null {
   }
   return null
 }
-
-export function validateAudioFile(file: File): string | null {
-  if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|m4a|ogg|webm|aac)$/i)) {
-    return 'Formato de audio no soportado. Prueba MP3, WAV, M4A u OGG.'
-  }
-  if (file.size > 15 * 1024 * 1024) {
-    return 'El audio no puede superar 15 MB.'
-  }
-  return null
-}

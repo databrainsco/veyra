@@ -5,6 +5,7 @@ export interface VectorStore {
   add(chunks: VectorChunk[]): Promise<void>
   search(embedding: number[], options?: SearchOptions): Promise<SearchResult[]>
   delete(id: string): Promise<void>
+  deleteBySource(sourceId: string): Promise<void>
   clear(): Promise<void>
   count(): Promise<number>
 }
@@ -20,6 +21,10 @@ export class IndexedDBVectorStore implements VectorStore {
 
   async delete(id: string): Promise<void> {
     await chunkRepo.delete(id)
+  }
+
+  async deleteBySource(sourceId: string): Promise<void> {
+    await chunkRepo.deleteBySource(sourceId)
   }
 
   async clear(): Promise<void> {

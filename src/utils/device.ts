@@ -1,6 +1,5 @@
 import type { DeviceCapabilities } from '../types'
-import { getModelInfo, AVAILABLE_MODELS } from '../services/llm/models'
-import { getSpeechModelInfo } from '../services/speech/speechModels'
+import { getModelInfo, getModelsForDevice } from '../services/llm/models'
 
 export interface ModelCompatibility {
   compatible: boolean
@@ -71,7 +70,15 @@ export function getRecommendedModelId(capabilities: DeviceCapabilities): string 
   const isMobile = isMobilePlatform(capabilities)
   const memory = getEffectiveMemoryGB(capabilities)
 
-  if (isMobile || memory < 4) {
+  if (isMobile) {
+    if (memory >= 8) return 'Qwen3.5-4B-q4f16_1-MLC'
+    if (memory >= 6) return 'Qwen3.5-2B-q4f16_1-MLC'
+    if (memory >= 4) return 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
+    if (memory >= 3) return 'Qwen3.5-0.8B-q4f16_1-MLC'
+    return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
+  }
+
+  if (memory < 4) {
     return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
   }
   if (capabilities.webgpu && memory >= 6) {
@@ -83,19 +90,11 @@ export function getRecommendedModelId(capabilities: DeviceCapabilities): string 
   return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
 }
 
-export function getRecommendedSpeechModelId(): string {
-  return 'whisper-tiny'
-}
-
-function getCatalogModel(modelId: string) {
-  return getModelInfo(modelId) ?? getSpeechModelInfo(modelId)
-}
-
 export function isModelCompatible(
   modelId: string,
   capabilities: DeviceCapabilities,
 ): ModelCompatibility {
-  const model = getCatalogModel(modelId)
+  const model = getModelInfo(modelId)
   if (!model) {
     return { compatible: false, reason: 'Modelo no encontrado.' }
   }
@@ -104,17 +103,24 @@ export function isModelCompatible(
   const isMobile = isMobilePlatform(capabilities)
   const memory = getEffectiveMemoryGB(capabilities)
 
-  if (deviceRequirements.requiresWebGPU && !capabilities.webgpu) {
+  if (!isMobile && model.deviceRequirements.mobileOnly) {
     return {
       compatible: false,
-      reason: `${model.name} requiere WebGPU. Usa Chrome actualizado en un dispositivo compatible.`,
+      reason: `${model.name} solo está disponible en móvil.`,
     }
   }
 
   if (isMobile && !deviceRequirements.mobileSupported) {
     return {
       compatible: false,
-      reason: `${model.name} no está disponible en móvil. En este dispositivo usa Qwen 2.5 0.5B.`,
+      reason: `${model.name} es solo para escritorio. En móvil usa un modelo de la sección compatible.`,
+    }
+  }
+
+  if (deviceRequirements.requiresWebGPU && !capabilities.webgpu) {
+    return {
+      compatible: false,
+      reason: `${model.name} requiere WebGPU. Usa Chrome actualizado en un dispositivo compatible.`,
     }
   }
 
@@ -138,53 +144,48 @@ export function isModelCompatible(
   return { compatible: true }
 }
 
-export function isSpeechCompatible(
-  modelId: string,
-  capabilities: DeviceCapabilities | null,
-): ModelCompatibility {
-  if (!capabilities) {
-    return { compatible: false, reason: 'Comprobando compatibilidad del dispositivo...' }
-  }
-  return isModelCompatible(modelId, capabilities)
-}
-
 export function getCompatibleLlmModelIds(capabilities: DeviceCapabilities): string[] {
-  return AVAILABLE_MODELS.filter((model) => isModelCompatible(model.id, capabilities).compatible).map(
-    (model) => model.id,
-  )
+  return getModelsForDevice(capabilities)
+    .filter((model) => isModelCompatible(model.id, capabilities).compatible)
+    .map((model) => model.id)
 }
 
 export interface DeviceCompatibilityTier {
   deviceLabel: string
   requirements: string
   llmModels: string[]
-  speechModels: string[]
 }
 
 export const DEVICE_COMPATIBILITY_TIERS: DeviceCompatibilityTier[] = [
   {
-    deviceLabel: 'Móvil (iOS / Android)',
-    requirements: 'WebGPU, 2 GB RAM mínimo',
-    llmModels: ['Qwen 2.5 0.5B'],
-    speechModels: ['Whisper Tiny', 'Whisper Base'],
+    deviceLabel: 'Móvil básico (2–3 GB)',
+    requirements: 'WebGPU, Chrome en Android/iOS',
+    llmModels: ['Qwen 2.5 0.5B', 'Qwen 3.5 0.8B', 'Gemma 3 1B'],
+  },
+  {
+    deviceLabel: 'Móvil intermedio (4 GB)',
+    requirements: 'WebGPU, 4 GB RAM reportada',
+    llmModels: ['Qwen 2.5 1.5B', 'SmolLM2 1.7B', 'Llama 3.2 1B'],
+  },
+  {
+    deviceLabel: 'Móvil gama alta (6–8 GB, ej. S25 Ultra)',
+    requirements: 'WebGPU, 6–8 GB RAM reportada',
+    llmModels: ['Qwen 3.5 4B', 'Qwen 3.5 2B', 'Qwen 2.5 3B', 'Hermes 3 3B', 'Gemma 2 2B'],
   },
   {
     deviceLabel: 'PC / Mac (4 GB RAM)',
     requirements: 'WebGPU, 4 GB RAM',
     llmModels: ['Qwen 2.5 0.5B', 'Llama 3.2 1B'],
-    speechModels: ['Whisper Tiny', 'Whisper Base'],
   },
   {
     deviceLabel: 'PC / Mac (6 GB+ RAM)',
     requirements: 'WebGPU, 6 GB RAM',
     llmModels: ['Llama 3.2 3B', 'Phi 3.5 Mini'],
-    speechModels: ['Whisper Tiny', 'Whisper Base'],
   },
   {
     deviceLabel: 'PC / Mac (8 GB+ RAM)',
     requirements: 'WebGPU, 8 GB RAM, escritorio',
     llmModels: ['Phi 3.5 Vision'],
-    speechModels: ['Whisper Tiny', 'Whisper Base'],
   },
 ]
 

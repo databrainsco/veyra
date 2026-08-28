@@ -165,8 +165,8 @@ export function SettingsPage() {
           <RagInfoButton onClick={() => setRagInfoOpen(true)} />
         </div>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-          Busca en tus conversaciones y documentos al responder en el chat. Toca ⓘ para ver ejemplos y
-          alcance.
+          Cada chat indexa su propio historial para recordar lo que preguntaste. En escritorio, con RAG
+          activado, también busca en documentos y otras conversaciones. Toca ⓘ para ver ejemplos.
         </p>
         <SettingRow label="RAG activado">
           <input
