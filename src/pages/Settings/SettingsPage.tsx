@@ -4,12 +4,14 @@ import { storageManager } from '../../services/storage/storageManager'
 import { exportBackup, importBackup, downloadBackup } from '../../services/storage/backupService'
 import { formatBytes } from '../../utils/helpers'
 import { formatAppVersion } from '../../utils/version'
+import { checkForUpdates, isUpdateSupported, type UpdateCheckResult } from '../../services/update/updateService'
 import type { AppSettings, StorageUsage } from '../../types'
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [usage, setUsage] = useState<StorageUsage | null>(null)
   const [persisted, setPersisted] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | UpdateCheckResult>('idle')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -61,6 +63,29 @@ export function SettingsPage() {
     setPersisted(result)
   }
 
+  async function handleCheckUpdates() {
+    setUpdateStatus('checking')
+    const result = await checkForUpdates()
+    setUpdateStatus(result)
+  }
+
+  function updateStatusMessage(): string | null {
+    switch (updateStatus) {
+      case 'checking':
+        return 'Buscando actualizaciones...'
+      case 'uptodate':
+        return 'Ya tienes la última versión.'
+      case 'unsupported':
+        return 'Las actualizaciones automáticas requieren la app instalada o un navegador compatible.'
+      case 'error':
+        return 'No se pudo comprobar actualizaciones. Intenta de nuevo.'
+      case 'updated':
+        return 'Actualización encontrada. Recargando...'
+      default:
+        return null
+    }
+  }
+
   if (!settings) return null
 
   return (
@@ -96,6 +121,32 @@ export function SettingsPage() {
             {formatAppVersion()}
           </span>
         </SettingRow>
+        <div style={{ paddingTop: 12 }}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleCheckUpdates}
+            disabled={updateStatus === 'checking'}
+            style={{ width: '100%' }}
+          >
+            {updateStatus === 'checking' ? 'Buscando...' : 'Buscar actualizaciones'}
+          </button>
+          {updateStatusMessage() && (
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: '0.8125rem',
+                color: updateStatus === 'error' ? 'var(--error)' : 'var(--text-muted)',
+              }}
+            >
+              {updateStatusMessage()}
+            </p>
+          )}
+          {!isUpdateSupported() && updateStatus === 'idle' && (
+            <p style={{ marginTop: 8, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+              Service Worker no disponible en este entorno.
+            </p>
+          )}
+        </div>
       </Section>
 
       <Section title="Memoria / RAG">
