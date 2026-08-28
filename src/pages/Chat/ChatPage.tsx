@@ -11,6 +11,7 @@ import { SourceList } from '../../components/chat/SourceList'
 import { ConversationDrawer } from '../../components/chat/ConversationDrawer'
 import { generateId, groupByDate } from '../../utils/helpers'
 import { formatUserError } from '../../utils/errors'
+import { detectDeviceCapabilities, isModelCompatible } from '../../utils/device'
 import { fileToDataUrl, validateAudioFile, validateImageFile } from '../../utils/files'
 import type { Conversation, ChatMessage, MessageAttachment } from '../../types'
 import './Chat.css'
@@ -52,6 +53,15 @@ export function ChatPage() {
     const settings = await settingsRepo.get()
     setActiveModelId(settings.activeModelId)
     if (!settings.activeModelId) {
+      setModelLoaded(false)
+      return false
+    }
+
+    const capabilities = await detectDeviceCapabilities()
+    const compatibility = isModelCompatible(settings.activeModelId, capabilities)
+    if (!compatibility.compatible) {
+      await settingsRepo.update({ activeModelId: null })
+      setActiveModelId(null)
       setModelLoaded(false)
       return false
     }

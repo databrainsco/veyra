@@ -93,6 +93,11 @@ export interface ModelInfo {
   }
   specialtySummary: string
   category: ModelCategory
+  deviceRequirements: {
+    minMemoryGB: number
+    mobileSupported: boolean
+    requiresWebGPU: boolean
+  }
 }
 
 export interface InstalledModel {

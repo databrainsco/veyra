@@ -28,6 +28,11 @@ export const AVAILABLE_MODELS: LLMCatalogEntry[] = [
     modalities: TEXT_ONLY_LIMITS,
     specialtySummary: 'Conversación general y redacción ligera. Ideal para dispositivos con poca RAM.',
     category: 'llm',
+    deviceRequirements: {
+      minMemoryGB: 4,
+      mobileSupported: false,
+      requiresWebGPU: true,
+    },
   },
   {
     id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
@@ -42,6 +47,11 @@ export const AVAILABLE_MODELS: LLMCatalogEntry[] = [
     modalities: TEXT_ONLY_LIMITS,
     specialtySummary: 'Equilibrio entre calidad y capacidad. Bueno para tareas variadas y contexto largo.',
     category: 'llm',
+    deviceRequirements: {
+      minMemoryGB: 6,
+      mobileSupported: false,
+      requiresWebGPU: true,
+    },
   },
   {
     id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
@@ -56,6 +66,11 @@ export const AVAILABLE_MODELS: LLMCatalogEntry[] = [
     modalities: TEXT_ONLY_LIMITS,
     specialtySummary: 'Orientado a programación, lógica y problemas técnicos.',
     category: 'llm',
+    deviceRequirements: {
+      minMemoryGB: 6,
+      mobileSupported: false,
+      requiresWebGPU: true,
+    },
   },
   {
     id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
@@ -70,6 +85,11 @@ export const AVAILABLE_MODELS: LLMCatalogEntry[] = [
     modalities: TEXT_ONLY_LIMITS,
     specialtySummary: 'El más ligero. Mejor para móviles y respuestas rápidas en texto.',
     category: 'llm',
+    deviceRequirements: {
+      minMemoryGB: 2,
+      mobileSupported: true,
+      requiresWebGPU: true,
+    },
   },
   {
     id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
@@ -84,6 +104,11 @@ export const AVAILABLE_MODELS: LLMCatalogEntry[] = [
     modalities: VISION_LIMITS,
     specialtySummary: 'Entiende imágenes y responde sobre ellas. Requiere más memoria; mejor en desktop.',
     category: 'llm',
+    deviceRequirements: {
+      minMemoryGB: 8,
+      mobileSupported: false,
+      requiresWebGPU: true,
+    },
   },
 ]
 

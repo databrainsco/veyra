@@ -26,6 +26,11 @@ export const AVAILABLE_SPEECH_MODELS: SpeechCatalogEntry[] = [
     modalities: AUDIO_LIMITS,
     specialtySummary: 'El más ligero. Transcribe audio a texto localmente. Ideal para móvil.',
     category: 'speech',
+    deviceRequirements: {
+      minMemoryGB: 1,
+      mobileSupported: true,
+      requiresWebGPU: false,
+    },
   },
   {
     id: 'whisper-base',
@@ -41,6 +46,11 @@ export const AVAILABLE_SPEECH_MODELS: SpeechCatalogEntry[] = [
     modalities: AUDIO_LIMITS,
     specialtySummary: 'Mayor precisión en transcripción. Recomendado si tienes espacio.',
     category: 'speech',
+    deviceRequirements: {
+      minMemoryGB: 2,
+      mobileSupported: true,
+      requiresWebGPU: false,
+    },
   },
 ]
 

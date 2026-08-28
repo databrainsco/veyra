@@ -1,6 +1,7 @@
 import { ModelSpecialties } from './ModelSpecialties'
 import { formatBytes } from '../../utils/helpers'
-import type { InstalledModel, DeviceCapabilities } from '../../types'
+import type { InstalledModel } from '../../types'
+import type { ModelCompatibility } from '../../utils/device'
 import type { LLMCatalogEntry } from '../../services/llm/models'
 import type { SpeechCatalogEntry } from '../../services/speech/speechModels'
 
@@ -9,7 +10,7 @@ type CatalogModel = LLMCatalogEntry | SpeechCatalogEntry
 interface ModelCardProps {
   model: CatalogModel
   status: InstalledModel['status']
-  compat: { compatible: boolean; reason?: string }
+  compat: ModelCompatibility
   isLoading: boolean
   progress: number
   isActive: boolean
@@ -55,15 +56,30 @@ export function ModelCard({
   }
 
   const displayStatus = isActive && status !== 'not_installed' ? 'active' : status
+  const canUse = compat.compatible
+  const isInstalled = status === 'installed' || status === 'active' || status === 'error'
 
   return (
-    <div className="card">
+    <div
+      className="card"
+      style={{
+        opacity: canUse || isInstalled ? 1 : 0.72,
+        borderColor: canUse ? undefined : 'var(--border)',
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
           <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>{model.name}</h3>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{model.provider}</div>
         </div>
-        <span className={`badge ${statusBadgeClass(displayStatus)}`}>{statusLabel(displayStatus)}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          <span className={`badge ${statusBadgeClass(displayStatus)}`}>{statusLabel(displayStatus)}</span>
+          {!canUse && (
+            <span className="badge badge-error" style={{ fontSize: '0.7rem' }}>
+              No compatible
+            </span>
+          )}
+        </div>
       </div>
 
       <ModelSpecialties model={model} />
@@ -94,9 +110,13 @@ export function ModelCard({
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Backend:</span> {model.backend.toUpperCase()}
         </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>RAM mínima:</span>{' '}
+          {model.deviceRequirements.minMemoryGB} GB
+        </div>
       </div>
 
-      {!compat.compatible && (
+      {!canUse && (
         <p style={{ fontSize: '0.8125rem', color: 'var(--warning)', marginBottom: 12 }}>{compat.reason}</p>
       )}
 
@@ -114,21 +134,21 @@ export function ModelCard({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {status === 'not_installed' || status === 'error' ? (
-          <button className="btn btn-primary" onClick={onDownload} disabled={isLoading || !compat.compatible}>
-            {isLoading ? 'Descargando...' : 'Descargar'}
+          <button className="btn btn-primary" onClick={onDownload} disabled={isLoading || !canUse}>
+            {isLoading ? 'Descargando...' : canUse ? 'Descargar' : 'No disponible'}
           </button>
         ) : isActive ? (
           <button className="btn btn-secondary" disabled>
             Activo
           </button>
         ) : (
-          <button className="btn btn-primary" onClick={onDownload} disabled={isLoading}>
-            Activar
+          <button className="btn btn-primary" onClick={onDownload} disabled={isLoading || !canUse}>
+            {canUse ? 'Activar' : 'No disponible'}
           </button>
         )}
-        {(status === 'installed' || status === 'active' || status === 'error') && (
+        {isInstalled && (
           <button className="btn btn-danger" onClick={onDelete}>
             Eliminar
           </button>
@@ -136,11 +156,4 @@ export function ModelCard({
       </div>
     </div>
   )
-}
-
-export function isSpeechCompatible(
-  _modelId: string,
-  _capabilities: DeviceCapabilities | null,
-): { compatible: boolean; reason?: string } {
-  return { compatible: true }
 }

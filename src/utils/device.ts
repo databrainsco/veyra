@@ -1,4 +1,11 @@
 import type { DeviceCapabilities } from '../types'
+import { getModelInfo, AVAILABLE_MODELS } from '../services/llm/models'
+import { getSpeechModelInfo } from '../services/speech/speechModels'
+
+export interface ModelCompatibility {
+  compatible: boolean
+  reason?: string
+}
 
 export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   let webgpu = false
@@ -49,9 +56,20 @@ export async function detectDeviceCapabilities(): Promise<DeviceCapabilities> {
   }
 }
 
+export function isMobilePlatform(capabilities: DeviceCapabilities): boolean {
+  return capabilities.platform === 'iOS' || capabilities.platform === 'Android'
+}
+
+export function getEffectiveMemoryGB(capabilities: DeviceCapabilities): number {
+  if (capabilities.estimatedMemoryGB != null) {
+    return capabilities.estimatedMemoryGB
+  }
+  return isMobilePlatform(capabilities) ? 2 : 4
+}
+
 export function getRecommendedModelId(capabilities: DeviceCapabilities): string {
-  const isMobile = capabilities.platform === 'iOS' || capabilities.platform === 'Android'
-  const memory = capabilities.estimatedMemoryGB ?? 4
+  const isMobile = isMobilePlatform(capabilities)
+  const memory = getEffectiveMemoryGB(capabilities)
 
   if (isMobile || memory < 4) {
     return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
@@ -65,38 +83,73 @@ export function getRecommendedModelId(capabilities: DeviceCapabilities): string 
   return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC'
 }
 
+export function getRecommendedSpeechModelId(): string {
+  return 'whisper-tiny'
+}
+
+function getCatalogModel(modelId: string) {
+  return getModelInfo(modelId) ?? getSpeechModelInfo(modelId)
+}
+
 export function isModelCompatible(
   modelId: string,
   capabilities: DeviceCapabilities,
-): { compatible: boolean; reason?: string } {
-  const largeModels = [
-    'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    'Phi-3.5-mini-instruct-q4f16_1-MLC',
-    'Phi-3.5-vision-instruct-q4f16_1-MLC',
-  ]
-  const isLarge = largeModels.includes(modelId)
-  const isVision = modelId.includes('vision')
+): ModelCompatibility {
+  const model = getCatalogModel(modelId)
+  if (!model) {
+    return { compatible: false, reason: 'Modelo no encontrado.' }
+  }
 
-  if (!capabilities.webgpu) {
+  const { deviceRequirements } = model
+  const isMobile = isMobilePlatform(capabilities)
+  const memory = getEffectiveMemoryGB(capabilities)
+
+  if (deviceRequirements.requiresWebGPU && !capabilities.webgpu) {
     return {
       compatible: false,
-      reason: 'WebGPU no está disponible en este dispositivo. Se requiere un navegador compatible con WebGPU.',
+      reason: `${model.name} requiere WebGPU. Usa Chrome actualizado en un dispositivo compatible.`,
     }
   }
 
-  if (isVision && (capabilities.estimatedMemoryGB ?? 4) < 6) {
+  if (isMobile && !deviceRequirements.mobileSupported) {
     return {
       compatible: false,
-      reason: 'Phi 3.5 Vision requiere al menos 6 GB de RAM. Mejor en desktop.',
+      reason: `${model.name} no está disponible en móvil. En este dispositivo usa Qwen 2.5 0.5B.`,
     }
   }
 
-  if (isLarge && !isVision && (capabilities.estimatedMemoryGB ?? 4) < 6) {
+  if (memory < deviceRequirements.minMemoryGB) {
     return {
       compatible: false,
-      reason: 'Este modelo requiere al menos 6 GB de memoria. Prueba con un modelo más pequeño.',
+      reason: `${model.name} requiere al menos ${deviceRequirements.minMemoryGB} GB de RAM (tu dispositivo: ~${memory} GB).`,
+    }
+  }
+
+  if (
+    model.sizeBytes > 1.5 * 1024 * 1024 * 1024 &&
+    memory < deviceRequirements.minMemoryGB + 1
+  ) {
+    return {
+      compatible: false,
+      reason: `${model.name} es demasiado pesado para la RAM disponible en tu dispositivo.`,
     }
   }
 
   return { compatible: true }
+}
+
+export function isSpeechCompatible(
+  modelId: string,
+  capabilities: DeviceCapabilities | null,
+): ModelCompatibility {
+  if (!capabilities) {
+    return { compatible: false, reason: 'Comprobando compatibilidad del dispositivo...' }
+  }
+  return isModelCompatible(modelId, capabilities)
+}
+
+export function getCompatibleLlmModelIds(capabilities: DeviceCapabilities): string[] {
+  return AVAILABLE_MODELS.filter((model) => isModelCompatible(model.id, capabilities).compatible).map(
+    (model) => model.id,
+  )
 }

@@ -5,9 +5,29 @@ import { modelRepo } from '../../db/repositories/settingsRepository'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
 import { getSpeechService } from '../../services/speech/TransformersSpeechService'
-import { detectDeviceCapabilities, isModelCompatible } from '../../utils/device'
-import { ModelCard, isSpeechCompatible } from '../../components/models/ModelCard'
+import {
+  detectDeviceCapabilities,
+  getEffectiveMemoryGB,
+  getRecommendedModelId,
+  isMobilePlatform,
+  isModelCompatible,
+  isSpeechCompatible,
+} from '../../utils/device'
+import { getModelInfo } from '../../services/llm/models'
+import { ModelCard } from '../../components/models/ModelCard'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
+
+function sortByCompatibility<T extends { id: string }>(
+  models: T[],
+  capabilities: DeviceCapabilities,
+): T[] {
+  return [...models].sort((a, b) => {
+    const aCompat = isModelCompatible(a.id, capabilities).compatible
+    const bCompat = isModelCompatible(b.id, capabilities).compatible
+    if (aCompat === bCompat) return 0
+    return aCompat ? -1 : 1
+  })
+}
 
 export function ModelsPage() {
   const [installed, setInstalled] = useState<InstalledModel[]>([])
@@ -28,6 +48,15 @@ export function ModelsPage() {
     setActiveModelId(settings.activeModelId)
     setActiveSpeechModelId(settings.activeSpeechModelId)
     setCapabilities(caps)
+
+    if (settings.activeModelId && !isModelCompatible(settings.activeModelId, caps).compatible) {
+      const llm = getLLMService()
+      if (llm.getActiveModelId() === settings.activeModelId) {
+        await llm.unloadModel()
+      }
+      await settingsRepo.update({ activeModelId: null })
+      setActiveModelId(null)
+    }
   }
 
   useEffect(() => {
@@ -44,6 +73,14 @@ export function ModelsPage() {
   }
 
   async function handleDownloadLlm(modelId: string) {
+    if (!capabilities) return
+
+    const compat = isModelCompatible(modelId, capabilities)
+    if (!compat.compatible) {
+      setError(compat.reason ?? 'Este modelo no es compatible con tu dispositivo.')
+      return
+    }
+
     setLoadingModel(modelId)
     setError(null)
     setProgress(0)
@@ -73,6 +110,14 @@ export function ModelsPage() {
   }
 
   async function handleDownloadSpeech(modelId: string) {
+    if (!capabilities) return
+
+    const compat = isSpeechCompatible(modelId, capabilities)
+    if (!compat.compatible) {
+      setError(compat.reason ?? 'Este modelo de audio no es compatible con tu dispositivo.')
+      return
+    }
+
     setLoadingModel(modelId)
     setError(null)
     setProgress(0)
@@ -101,23 +146,31 @@ export function ModelsPage() {
     await loadState()
   }
 
+  const recommendedModelId = capabilities ? getRecommendedModelId(capabilities) : null
+  const recommendedModel = recommendedModelId ? getModelInfo(recommendedModelId) : null
+  const sortedLlmModels = capabilities ? sortByCompatibility(AVAILABLE_MODELS, capabilities) : AVAILABLE_MODELS
+
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: 8 }}>Modelos</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: '0.875rem' }}>
-        Modelos locales descargables para texto, imágenes y audio.
+        Solo puedes descargar modelos compatibles con tu dispositivo.
       </p>
 
       {capabilities && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.8125rem' }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.8125rem', marginBottom: 12 }}>
             <span>WebGPU: {capabilities.webgpu ? '✓' : '✗'}</span>
             <span>Plataforma: {capabilities.platform}</span>
             <span>Navegador: {capabilities.browser}</span>
-            {capabilities.estimatedMemoryGB && (
-              <span>RAM: ~{capabilities.estimatedMemoryGB} GB</span>
-            )}
+            <span>RAM: ~{getEffectiveMemoryGB(capabilities)} GB</span>
+            {isMobilePlatform(capabilities) && <span>Móvil: sí</span>}
           </div>
+          {recommendedModel && (
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Recomendado para ti: <strong>{recommendedModel.name}</strong>
+            </p>
+          )}
         </div>
       )}
 
@@ -140,9 +193,11 @@ export function ModelsPage() {
         Lenguaje (chat y visión)
       </h2>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
-        {AVAILABLE_MODELS.map((model) => {
+        {sortedLlmModels.map((model) => {
           const status = getStatus(model.id, 'llm')
-          const compat = capabilities ? isModelCompatible(model.id, capabilities) : { compatible: true }
+          const compat = capabilities
+            ? isModelCompatible(model.id, capabilities)
+            : { compatible: false, reason: 'Comprobando compatibilidad...' }
           const isLoading = loadingModel === model.id
 
           return (
