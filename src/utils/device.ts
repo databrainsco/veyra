@@ -153,3 +153,55 @@ export function getCompatibleLlmModelIds(capabilities: DeviceCapabilities): stri
     (model) => model.id,
   )
 }
+
+export interface DeviceCompatibilityTier {
+  deviceLabel: string
+  requirements: string
+  llmModels: string[]
+  speechModels: string[]
+}
+
+export const DEVICE_COMPATIBILITY_TIERS: DeviceCompatibilityTier[] = [
+  {
+    deviceLabel: 'Móvil (iOS / Android)',
+    requirements: 'WebGPU, 2 GB RAM mínimo',
+    llmModels: ['Qwen 2.5 0.5B'],
+    speechModels: ['Whisper Tiny', 'Whisper Base'],
+  },
+  {
+    deviceLabel: 'PC / Mac (4 GB RAM)',
+    requirements: 'WebGPU, 4 GB RAM',
+    llmModels: ['Qwen 2.5 0.5B', 'Llama 3.2 1B'],
+    speechModels: ['Whisper Tiny', 'Whisper Base'],
+  },
+  {
+    deviceLabel: 'PC / Mac (6 GB+ RAM)',
+    requirements: 'WebGPU, 6 GB RAM',
+    llmModels: ['Llama 3.2 3B', 'Phi 3.5 Mini'],
+    speechModels: ['Whisper Tiny', 'Whisper Base'],
+  },
+  {
+    deviceLabel: 'PC / Mac (8 GB+ RAM)',
+    requirements: 'WebGPU, 8 GB RAM, escritorio',
+    llmModels: ['Phi 3.5 Vision'],
+    speechModels: ['Whisper Tiny', 'Whisper Base'],
+  },
+]
+
+export function partitionByCompatibility<T extends { id: string }>(
+  models: T[],
+  capabilities: DeviceCapabilities,
+): { compatible: T[]; incompatible: T[] } {
+  const compatible: T[] = []
+  const incompatible: T[] = []
+
+  for (const model of models) {
+    if (isModelCompatible(model.id, capabilities).compatible) {
+      compatible.push(model)
+    } else {
+      incompatible.push(model)
+    }
+  }
+
+  return { compatible, incompatible }
+}

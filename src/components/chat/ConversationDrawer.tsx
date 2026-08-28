@@ -36,7 +36,7 @@ export function ConversationDrawer({
         <div className="conversation-drawer-header">
           <h2>Conversaciones</h2>
           <button className="btn-ghost" onClick={onClose} aria-label="Cerrar">
-            ✕
+            Cerrar
           </button>
         </div>
         <div className="conversation-drawer-actions">

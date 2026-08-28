@@ -7,26 +7,76 @@ import { getLLMService } from '../../services/llm/LocalLLMService'
 import { getSpeechService } from '../../services/speech/TransformersSpeechService'
 import {
   detectDeviceCapabilities,
+  DEVICE_COMPATIBILITY_TIERS,
   getEffectiveMemoryGB,
   getRecommendedModelId,
   isMobilePlatform,
   isModelCompatible,
   isSpeechCompatible,
+  partitionByCompatibility,
 } from '../../utils/device'
 import { getModelInfo } from '../../services/llm/models'
 import { ModelCard } from '../../components/models/ModelCard'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
+import type { LLMCatalogEntry } from '../../services/llm/models'
+import type { SpeechCatalogEntry } from '../../services/speech/speechModels'
 
-function sortByCompatibility<T extends { id: string }>(
-  models: T[],
-  capabilities: DeviceCapabilities,
-): T[] {
-  return [...models].sort((a, b) => {
-    const aCompat = isModelCompatible(a.id, capabilities).compatible
-    const bCompat = isModelCompatible(b.id, capabilities).compatible
-    if (aCompat === bCompat) return 0
-    return aCompat ? -1 : 1
-  })
+function ModelSection({
+  title,
+  models,
+  capabilities,
+  type,
+  getStatus,
+  loadingModel,
+  progress,
+  activeId,
+  onDownload,
+  onDelete,
+}: {
+  title: string
+  models: Array<LLMCatalogEntry | SpeechCatalogEntry>
+  capabilities: DeviceCapabilities | null
+  type: 'llm' | 'speech'
+  getStatus: (modelId: string, type: 'llm' | 'speech') => InstalledModel['status']
+  loadingModel: string | null
+  progress: number
+  activeId: string | null
+  onDownload: (modelId: string) => void
+  onDelete: (modelId: string) => void
+}) {
+  if (models.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <h3 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 12, fontWeight: 600 }}>
+        {title}
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {models.map((model) => {
+          const status = getStatus(model.id, type)
+          const compat = capabilities
+            ? type === 'llm'
+              ? isModelCompatible(model.id, capabilities)
+              : isSpeechCompatible(model.id, capabilities)
+            : { compatible: false, reason: 'Comprobando compatibilidad...' }
+
+          return (
+            <ModelCard
+              key={model.id}
+              model={model}
+              status={status}
+              compat={compat}
+              isLoading={loadingModel === model.id}
+              progress={progress}
+              isActive={activeId === model.id}
+              onDownload={() => onDownload(model.id)}
+              onDelete={() => onDelete(model.id)}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function ModelsPage() {
@@ -148,7 +198,12 @@ export function ModelsPage() {
 
   const recommendedModelId = capabilities ? getRecommendedModelId(capabilities) : null
   const recommendedModel = recommendedModelId ? getModelInfo(recommendedModelId) : null
-  const sortedLlmModels = capabilities ? sortByCompatibility(AVAILABLE_MODELS, capabilities) : AVAILABLE_MODELS
+  const llmPartitions = capabilities
+    ? partitionByCompatibility(AVAILABLE_MODELS, capabilities)
+    : { compatible: AVAILABLE_MODELS, incompatible: [] as LLMCatalogEntry[] }
+  const speechPartitions = capabilities
+    ? partitionByCompatibility(AVAILABLE_SPEECH_MODELS, capabilities)
+    : { compatible: AVAILABLE_SPEECH_MODELS, incompatible: [] as SpeechCatalogEntry[] }
 
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
@@ -157,17 +212,44 @@ export function ModelsPage() {
         Solo puedes descargar modelos compatibles con tu dispositivo.
       </p>
 
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: '0.9375rem', marginBottom: 12 }}>Dispositivos compatibles</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {DEVICE_COMPATIBILITY_TIERS.map((tier) => (
+            <div
+              key={tier.deviceLabel}
+              style={{
+                padding: 12,
+                background: 'var(--bg-tertiary)',
+                borderRadius: 8,
+                fontSize: '0.8125rem',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{tier.deviceLabel}</div>
+              <div style={{ color: 'var(--text-muted)', marginBottom: 6 }}>{tier.requirements}</div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                Chat: {tier.llmModels.join(', ')}
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                Audio: {tier.speechModels.join(', ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {capabilities && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.8125rem', marginBottom: 12 }}>
-            <span>WebGPU: {capabilities.webgpu ? '✓' : '✗'}</span>
+          <h2 style={{ fontSize: '0.9375rem', marginBottom: 12 }}>Tu dispositivo</h2>
+          <div style={{ display: 'grid', gap: 6, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+            <span>WebGPU: {capabilities.webgpu ? 'Sí' : 'No'}</span>
             <span>Plataforma: {capabilities.platform}</span>
             <span>Navegador: {capabilities.browser}</span>
-            <span>RAM: ~{getEffectiveMemoryGB(capabilities)} GB</span>
-            {isMobilePlatform(capabilities) && <span>Móvil: sí</span>}
+            <span>RAM estimada: ~{getEffectiveMemoryGB(capabilities)} GB</span>
+            <span>Tipo: {isMobilePlatform(capabilities) ? 'Móvil' : 'Escritorio'}</span>
           </div>
           {recommendedModel && (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: 0 }}>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 12, marginBottom: 0 }}>
               Recomendado para ti: <strong>{recommendedModel.name}</strong>
             </p>
           )}
@@ -189,60 +271,75 @@ export function ModelsPage() {
         </div>
       )}
 
-      <h2 style={{ fontSize: '1rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+      <h2 style={{ fontSize: '1rem', marginBottom: 16, color: 'var(--text-secondary)' }}>
         Lenguaje (chat y visión)
       </h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
-        {sortedLlmModels.map((model) => {
-          const status = getStatus(model.id, 'llm')
-          const compat = capabilities
-            ? isModelCompatible(model.id, capabilities)
-            : { compatible: false, reason: 'Comprobando compatibilidad...' }
-          const isLoading = loadingModel === model.id
 
-          return (
-            <ModelCard
-              key={model.id}
-              model={model}
-              status={status}
-              compat={compat}
-              isLoading={isLoading}
-              progress={progress}
-              isActive={activeModelId === model.id}
-              onDownload={() => handleDownloadLlm(model.id)}
-              onDelete={() => handleDeleteLlm(model.id)}
-            />
-          )
-        })}
-      </div>
+      <ModelSection
+        title="Compatibles con tu dispositivo"
+        models={llmPartitions.compatible}
+        capabilities={capabilities}
+        type="llm"
+        getStatus={getStatus}
+        loadingModel={loadingModel}
+        progress={progress}
+        activeId={activeModelId}
+        onDownload={handleDownloadLlm}
+        onDelete={handleDeleteLlm}
+      />
 
-      <h2 style={{ fontSize: '1rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+      <ModelSection
+        title="No compatibles con tu dispositivo"
+        models={llmPartitions.incompatible}
+        capabilities={capabilities}
+        type="llm"
+        getStatus={getStatus}
+        loadingModel={loadingModel}
+        progress={progress}
+        activeId={activeModelId}
+        onDownload={handleDownloadLlm}
+        onDelete={handleDeleteLlm}
+      />
+
+      <h2
+        style={{
+          fontSize: '1rem',
+          marginBottom: 16,
+          marginTop: 32,
+          color: 'var(--text-secondary)',
+        }}
+      >
         Audio (voz a texto)
       </h2>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginBottom: 12 }}>
-        Transcribe notas de voz y audio a texto en el chat. No genera voz ni música.
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginBottom: 16 }}>
+        Transcribe notas de voz y audio a texto en el chat.
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {AVAILABLE_SPEECH_MODELS.map((model) => {
-          const status = getStatus(model.id, 'speech')
-          const compat = isSpeechCompatible(model.id, capabilities)
-          const isLoading = loadingModel === model.id
 
-          return (
-            <ModelCard
-              key={model.id}
-              model={model}
-              status={status}
-              compat={compat}
-              isLoading={isLoading}
-              progress={progress}
-              isActive={activeSpeechModelId === model.id}
-              onDownload={() => handleDownloadSpeech(model.id)}
-              onDelete={() => handleDeleteSpeech(model.id)}
-            />
-          )
-        })}
-      </div>
+      <ModelSection
+        title="Compatibles con tu dispositivo"
+        models={speechPartitions.compatible}
+        capabilities={capabilities}
+        type="speech"
+        getStatus={getStatus}
+        loadingModel={loadingModel}
+        progress={progress}
+        activeId={activeSpeechModelId}
+        onDownload={handleDownloadSpeech}
+        onDelete={handleDeleteSpeech}
+      />
+
+      <ModelSection
+        title="No compatibles con tu dispositivo"
+        models={speechPartitions.incompatible}
+        capabilities={capabilities}
+        type="speech"
+        getStatus={getStatus}
+        loadingModel={loadingModel}
+        progress={progress}
+        activeId={activeSpeechModelId}
+        onDownload={handleDownloadSpeech}
+        onDelete={handleDeleteSpeech}
+      />
     </div>
   )
 }

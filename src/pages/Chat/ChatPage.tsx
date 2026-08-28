@@ -411,7 +411,7 @@ export function ChatPage() {
             onClick={() => setDrawerOpen(true)}
             aria-label="Ver conversaciones"
           >
-            ☰
+            Chats
           </button>
           <h2 style={{ fontSize: '1rem', fontWeight: 500, flex: 1, minWidth: 0 }} className="chat-title">
             {activeConversation?.title ?? 'Chat'}
@@ -472,7 +472,7 @@ export function ChatPage() {
                               />
                             ) : att.type === 'audio' ? (
                               <div key={`${msg.id}-audio-${i}`} className="message-audio-tag">
-                                🎤 {att.name}
+                                Audio: {att.name}
                                 {att.transcription && (
                                   <span className="message-audio-transcription">
                                     Transcripción: {att.transcription}
@@ -522,13 +522,17 @@ export function ChatPage() {
                     <div className="attachment-chip">
                       <img src={pendingImage.dataUrl} alt="" className="attachment-thumb" />
                       <span>{pendingImage.name}</span>
-                      <button className="btn-ghost" onClick={() => setPendingImage(null)}>✕</button>
+                      <button className="btn-ghost attachment-remove" onClick={() => setPendingImage(null)}>
+                        Quitar
+                      </button>
                     </div>
                   )}
                   {pendingAudio && (
                     <div className="attachment-chip">
-                      <span>🎤 {pendingAudio.name}</span>
-                      <button className="btn-ghost" onClick={() => setPendingAudio(null)}>✕</button>
+                      <span>{pendingAudio.name}</span>
+                      <button className="btn-ghost attachment-remove" onClick={() => setPendingAudio(null)}>
+                        Quitar
+                      </button>
                     </div>
                   )}
                 </div>
@@ -536,25 +540,25 @@ export function ChatPage() {
               {attachmentError && (
                 <p className="chat-attachment-error">{attachmentError}</p>
               )}
-              <div className="chat-input-wrapper">
+              <div className="chat-input-toolbar">
                 <button
                   type="button"
-                  className="chat-attach-btn"
+                  className="chat-text-btn"
                   onClick={() => imageInputRef.current?.click()}
                   disabled={isGenerating || modelLoading || transcribing}
-                  title="Adjuntar imagen (requiere Phi 3.5 Vision)"
                 >
-                  📷
+                  Imagen
                 </button>
                 <button
                   type="button"
-                  className="chat-attach-btn"
+                  className="chat-text-btn"
                   onClick={() => audioInputRef.current?.click()}
                   disabled={isGenerating || modelLoading || transcribing}
-                  title="Adjuntar audio (requiere Whisper)"
                 >
-                  🎤
+                  Audio
                 </button>
+              </div>
+              <div className="chat-input-wrapper">
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -585,17 +589,16 @@ export function ChatPage() {
                   disabled={isGenerating || modelLoading || transcribing}
                 />
                 {isGenerating ? (
-                  <button className="chat-send-btn" onClick={stopGeneration} title="Detener">
-                    ■
+                  <button className="chat-action-btn" onClick={stopGeneration}>
+                    Detener
                   </button>
                 ) : (
                   <button
-                    className="chat-send-btn"
+                    className="chat-action-btn"
                     onClick={sendMessage}
                     disabled={(!input.trim() && !pendingImage && !pendingAudio) || modelLoading || transcribing}
-                    title="Enviar"
                   >
-                    ➤
+                    Enviar
                   </button>
                 )}
               </div>
