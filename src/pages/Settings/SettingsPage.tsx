@@ -5,18 +5,23 @@ import { exportBackup, importBackup, downloadBackup } from '../../services/stora
 import { formatBytes } from '../../utils/helpers'
 import { formatBuildDateTime, formatDeploymentVersion, formatUpToDateMessage } from '../../utils/version'
 import { checkForUpdates, isUpdateSupported, type UpdateCheckResult } from '../../services/update/updateService'
-import type { AppSettings, StorageUsage } from '../../types'
+import { detectDeviceCapabilities } from '../../utils/device'
+import { RagInfoButton, RagInfoModal } from '../../components/rag/RagInfoModal'
+import type { AppSettings, StorageUsage, DeviceCapabilities } from '../../types'
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [usage, setUsage] = useState<StorageUsage | null>(null)
   const [persisted, setPersisted] = useState(false)
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | UpdateCheckResult>('idle')
+  const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null)
+  const [ragInfoOpen, setRagInfoOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     settingsRepo.get().then(setSettings)
     storageManager.getUsage().then(setUsage)
+    detectDeviceCapabilities().then(setCapabilities)
     if (navigator.storage?.persisted) {
       navigator.storage.persisted().then(setPersisted)
     }
@@ -154,7 +159,15 @@ export function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Memoria / RAG">
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <h2 style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>Memoria / RAG</h2>
+          <RagInfoButton onClick={() => setRagInfoOpen(true)} />
+        </div>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+          Busca en tus conversaciones y documentos al responder en el chat. Toca ⓘ para ver ejemplos y
+          alcance.
+        </p>
         <SettingRow label="RAG activado">
           <input
             type="checkbox"
@@ -203,7 +216,14 @@ export function SettingsPage() {
             max={0.5}
           />
         </SettingRow>
-      </Section>
+      </div>
+
+      <RagInfoModal
+        open={ragInfoOpen}
+        onClose={() => setRagInfoOpen(false)}
+        capabilities={capabilities}
+        settings={settings}
+      />
 
       <Section title="Modelo">
         <SettingRow label="Temperature">

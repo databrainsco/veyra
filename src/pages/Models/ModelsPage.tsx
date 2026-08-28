@@ -67,6 +67,7 @@ function ModelSection({
               model={model}
               status={status}
               compat={compat}
+              capabilities={capabilities}
               isLoading={loadingModel === model.id}
               progress={progress}
               isActive={activeId === model.id}
@@ -210,7 +211,8 @@ export function ModelsPage() {
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: 8 }}>Modelos</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: '0.875rem' }}>
-        Solo puedes descargar modelos compatibles con tu dispositivo.
+        Solo puedes descargar modelos compatibles con tu dispositivo. Toca el botón de información
+        en cada modelo para ver qué puede hacer, sus límites y qué tipo de preguntas admite.
       </p>
 
       <details className="models-collapsible card" style={{ marginBottom: 24 }}>

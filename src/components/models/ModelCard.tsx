@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { ModelSpecialties } from './ModelSpecialties'
+import { ModelInfoButton, ModelInfoModal } from './ModelInfoModal'
 import { formatBytes } from '../../utils/helpers'
-import type { InstalledModel } from '../../types'
+import type { InstalledModel, DeviceCapabilities } from '../../types'
 import type { ModelCompatibility } from '../../utils/device'
 import type { LLMCatalogEntry } from '../../services/llm/models'
 import type { SpeechCatalogEntry } from '../../services/speech/speechModels'
@@ -11,6 +13,7 @@ interface ModelCardProps {
   model: CatalogModel
   status: InstalledModel['status']
   compat: ModelCompatibility
+  capabilities: DeviceCapabilities | null
   isLoading: boolean
   progress: number
   isActive: boolean
@@ -22,12 +25,14 @@ export function ModelCard({
   model,
   status,
   compat,
+  capabilities,
   isLoading,
   progress,
   isActive,
   onDownload,
   onDelete,
 }: ModelCardProps) {
+  const [infoOpen, setInfoOpen] = useState(false)
   function statusLabel(s: InstalledModel['status']) {
     const labels: Record<InstalledModel['status'], string> = {
       not_installed: 'No instalado',
@@ -68,9 +73,12 @@ export function ModelCard({
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>{model.name}</h3>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{model.provider}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>{model.name}</h3>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{model.provider}</div>
+          </div>
+          <ModelInfoButton onClick={() => setInfoOpen(true)} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
           <span className={`badge ${statusBadgeClass(displayStatus)}`}>{statusLabel(displayStatus)}</span>
@@ -154,6 +162,13 @@ export function ModelCard({
           </button>
         )}
       </div>
+
+      <ModelInfoModal
+        model={model}
+        capabilities={capabilities}
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+      />
     </div>
   )
 }

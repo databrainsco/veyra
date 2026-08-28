@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { documentRepo } from '../../db/repositories/documentRepository'
+import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { processDocument } from '../../services/documents/documentService'
+import { detectDeviceCapabilities } from '../../utils/device'
+import { RagInfoButton, RagInfoModal } from '../../components/rag/RagInfoModal'
 import { formatBytes } from '../../utils/helpers'
-import type { Document } from '../../types'
+import type { Document, AppSettings, DeviceCapabilities } from '../../types'
 
 export function LibraryPage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [ragInfoOpen, setRagInfoOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function loadDocuments() {
@@ -17,6 +23,10 @@ export function LibraryPage() {
 
   useEffect(() => {
     loadDocuments()
+    Promise.all([detectDeviceCapabilities(), settingsRepo.get()]).then(([caps, appSettings]) => {
+      setCapabilities(caps)
+      setSettings(appSettings)
+    })
   }, [])
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -56,12 +66,15 @@ export function LibraryPage() {
 
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', marginBottom: 4 }}>Biblioteca</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            Documentos indexados para memoria semántica
-          </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+          <div>
+            <h1 style={{ fontSize: '1.5rem', marginBottom: 4 }}>Biblioteca</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              Sube PDF o TXT para que el RAG los use en el chat
+            </p>
+          </div>
+          <RagInfoButton onClick={() => setRagInfoOpen(true)} />
         </div>
         <button
           className="btn btn-primary"
@@ -92,9 +105,12 @@ export function LibraryPage() {
           <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
             No hay documentos todavía
           </p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            Agrega archivos PDF o TXT para que Veyra pueda aprender de ellos.
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 16 }}>
+            Agrega archivos PDF o TXT para que Veyra pueda buscar en ellos al chatear.
           </p>
+          <button type="button" className="btn btn-secondary" onClick={() => setRagInfoOpen(true)}>
+            Ver ejemplos y alcance del RAG
+          </button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -121,6 +137,13 @@ export function LibraryPage() {
           ))}
         </div>
       )}
+
+      <RagInfoModal
+        open={ragInfoOpen}
+        onClose={() => setRagInfoOpen(false)}
+        capabilities={capabilities}
+        settings={settings}
+      />
     </div>
   )
 }
