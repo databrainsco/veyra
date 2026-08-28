@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
+import { HomeIcon } from './HomeIcon'
+import { formatAppVersion, getBuildHash, getRepoUrl } from '../../utils/version'
 import '../../styles/layout.css'
 
 const navItems = [
@@ -13,7 +15,10 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-logo">VEYRA</div>
+        <Link to="/" className="sidebar-home-link" aria-label="Ir al inicio">
+          <HomeIcon />
+        </Link>
+        <Link to="/" className="sidebar-logo">VEYRA</Link>
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
@@ -52,13 +57,12 @@ export function MobileNav() {
 }
 
 function FooterVersion() {
-  const hash = __BUILD_HASH__
-  const version = __APP_VERSION__
-  const repoUrl = __REPO_URL__
+  const hash = getBuildHash()
+  const repoUrl = getRepoUrl()
 
   return (
     <div className="footer-version">
-      v{version} ·{' '}
+      {formatAppVersion()} ·{' '}
       <a href={`${repoUrl}/commit/${hash}`} target="_blank" rel="noopener noreferrer">
         {hash.slice(0, 7)}
       </a>

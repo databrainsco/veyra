@@ -3,6 +3,7 @@ import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { storageManager } from '../../services/storage/storageManager'
 import { exportBackup, importBackup, downloadBackup } from '../../services/storage/backupService'
 import { formatBytes } from '../../utils/helpers'
+import { formatAppVersion } from '../../utils/version'
 import type { AppSettings, StorageUsage } from '../../types'
 
 export function SettingsPage() {
@@ -92,7 +93,7 @@ export function SettingsPage() {
         </SettingRow>
         <SettingRow label="Versión">
           <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            v{__APP_VERSION__}
+            {formatAppVersion()}
           </span>
         </SettingRow>
       </Section>

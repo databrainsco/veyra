@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
+import { formatAppVersion } from '../../utils/version'
 import './Home.css'
 
 export function HomePage() {
@@ -35,13 +36,28 @@ export function HomePage() {
         <h1 className="home-logo">VEYRA</h1>
         <p className="home-tagline">Your AI. Your memory. Your device.</p>
         <p className="home-subtitle">Tu conocimiento permanece contigo.</p>
+
+        <div className="home-description">
+          <p>
+            Veyra es tu IA personal que vive en tu dispositivo. Conversa con un modelo local,
+            guarda tus conversaciones y conviértelas en memoria consultable.
+          </p>
+          <p>
+            Carga documentos PDF y TXT, indexa tu conocimiento con RAG y recupera información
+            semanas o meses después — todo sin enviar tus datos a la nube.
+          </p>
+        </div>
+
         <button className="btn btn-primary" onClick={handleStart} style={{ minWidth: 180 }}>
           Comenzar
         </button>
+
         <div className="home-privacy">
           <span>🔒</span>
           <span>Procesamiento local</span>
         </div>
+
+        <div className="home-version">{formatAppVersion()}</div>
       </div>
     </div>
   )
