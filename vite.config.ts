@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, copyFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -42,11 +43,19 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2,webmanifest,mjs}'],
         navigateFallback: `${base}index.html`,
+        cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),
+    {
+      name: 'github-pages-spa-fallback',
+      closeBundle() {
+        const distDir = join(rootDir, 'dist')
+        copyFileSync(join(distDir, 'index.html'), join(distDir, '404.html'))
+      },
+    },
     {
       name: 'veyra-version-file',
       generateBundle() {
