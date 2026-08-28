@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { HomeIcon } from './HomeIcon'
-import { formatAppVersion } from '../../utils/version'
+import { formatDeploymentVersion } from '../../utils/version'
 
 export function AppTopBar() {
   return (
@@ -10,7 +10,7 @@ export function AppTopBar() {
         <span className="app-topbar-home-label">Inicio</span>
       </Link>
       <div className="app-topbar-brand">VEYRA</div>
-      <div className="app-topbar-version">{formatAppVersion()}</div>
+      <div className="app-topbar-version">{formatDeploymentVersion()}</div>
     </header>
   )
 }

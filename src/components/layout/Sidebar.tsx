@@ -1,6 +1,6 @@
 import { NavLink, Link } from 'react-router-dom'
 import { HomeIcon } from './HomeIcon'
-import { formatAppVersion, getBuildHash, getRepoUrl } from '../../utils/version'
+import { formatDeploymentVersion, formatBuildDateTime, getCommitUrl, getShortBuildHash } from '../../utils/version'
 import '../../styles/layout.css'
 
 const navItems = [
@@ -57,15 +57,21 @@ export function MobileNav() {
 }
 
 function FooterVersion() {
-  const hash = getBuildHash()
-  const repoUrl = getRepoUrl()
+  const hash = getShortBuildHash()
+  const repoUrl = getCommitUrl()
 
   return (
     <div className="footer-version">
-      {formatAppVersion()} ·{' '}
-      <a href={`${repoUrl}/commit/${hash}`} target="_blank" rel="noopener noreferrer">
-        {hash.slice(0, 7)}
-      </a>
+      {formatDeploymentVersion()}
+      {hash !== 'dev' && (
+        <>
+          {' · '}
+          <a href={repoUrl} target="_blank" rel="noopener noreferrer">
+            {hash}
+          </a>
+        </>
+      )}
+      <div style={{ marginTop: 4, fontSize: '0.6875rem' }}>{formatBuildDateTime()}</div>
     </div>
   )
 }

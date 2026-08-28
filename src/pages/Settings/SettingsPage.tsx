@@ -3,7 +3,7 @@ import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { storageManager } from '../../services/storage/storageManager'
 import { exportBackup, importBackup, downloadBackup } from '../../services/storage/backupService'
 import { formatBytes } from '../../utils/helpers'
-import { formatAppVersion } from '../../utils/version'
+import { formatBuildDateTime, formatDeploymentVersion, formatUpToDateMessage } from '../../utils/version'
 import { checkForUpdates, isUpdateSupported, type UpdateCheckResult } from '../../services/update/updateService'
 import type { AppSettings, StorageUsage } from '../../types'
 
@@ -74,7 +74,7 @@ export function SettingsPage() {
       case 'checking':
         return 'Buscando actualizaciones...'
       case 'uptodate':
-        return 'Ya tienes la última versión.'
+        return formatUpToDateMessage()
       case 'unsupported':
         return 'Las actualizaciones automáticas requieren la app instalada o un navegador compatible.'
       case 'error':
@@ -117,9 +117,14 @@ export function SettingsPage() {
           </select>
         </SettingRow>
         <SettingRow label="Versión">
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            {formatAppVersion()}
-          </span>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              {formatDeploymentVersion()}
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 2 }}>
+              {formatBuildDateTime()}
+            </div>
+          </div>
         </SettingRow>
         <div style={{ paddingTop: 12 }}>
           <button

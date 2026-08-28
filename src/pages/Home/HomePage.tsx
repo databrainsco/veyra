@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
-import { formatAppVersion } from '../../utils/version'
+import { formatDeploymentVersion, formatBuildDateTime } from '../../utils/version'
 import './Home.css'
 
 export function HomePage() {
@@ -57,7 +57,10 @@ export function HomePage() {
           <span>Procesamiento local</span>
         </div>
 
-        <div className="home-version">{formatAppVersion()}</div>
+        <div className="home-version">
+          <div>{formatDeploymentVersion()}</div>
+          <div className="home-version-date">{formatBuildDateTime()}</div>
+        </div>
       </div>
     </div>
   )

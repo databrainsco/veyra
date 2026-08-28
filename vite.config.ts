@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const rootDir = fileURLToPath(new URL('.', import.meta.url))
+const pkg = JSON.parse(readFileSync(`${rootDir}/package.json`, 'utf-8')) as { version: string }
+
 const base = process.env.VITE_BASE_PATH || '/veyra/'
+const appVersion = process.env.VITE_APP_VERSION || pkg.version
+const buildHash = process.env.VITE_BUILD_HASH || 'dev'
+const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString()
 
 export default defineConfig({
   base,
@@ -39,6 +47,24 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
     }),
+    {
+      name: 'veyra-version-file',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify(
+            {
+              version: appVersion,
+              buildHash,
+              buildTime,
+            },
+            null,
+            2,
+          ),
+        })
+      },
+    },
   ],
   build: {
     chunkSizeWarningLimit: 3000,
@@ -47,10 +73,11 @@ export default defineConfig({
     format: 'es',
   },
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
-    __BUILD_HASH__: JSON.stringify(process.env.VITE_BUILD_HASH || 'dev'),
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __BUILD_HASH__: JSON.stringify(buildHash),
+    __BUILD_TIME__: JSON.stringify(buildTime),
     __REPO_URL__: JSON.stringify(
-      process.env.VITE_REPO_URL || 'https://github.com/user/veyra',
+      process.env.VITE_REPO_URL || 'https://github.com/databrainsco/veyra',
     ),
   },
 })
