@@ -94,4 +94,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxTokens: 2048,
   onboardingComplete: false,
   embeddingModelId: 'Xenova/all-MiniLM-L6-v2',
+  activeSpeechModelId: null,
 }

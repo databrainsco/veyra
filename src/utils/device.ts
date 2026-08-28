@@ -69,8 +69,13 @@ export function isModelCompatible(
   modelId: string,
   capabilities: DeviceCapabilities,
 ): { compatible: boolean; reason?: string } {
-  const largeModels = ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Phi-3.5-mini-instruct-q4f16_1-MLC']
+  const largeModels = [
+    'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+    'Phi-3.5-mini-instruct-q4f16_1-MLC',
+    'Phi-3.5-vision-instruct-q4f16_1-MLC',
+  ]
   const isLarge = largeModels.includes(modelId)
+  const isVision = modelId.includes('vision')
 
   if (!capabilities.webgpu) {
     return {
@@ -79,7 +84,14 @@ export function isModelCompatible(
     }
   }
 
-  if (isLarge && (capabilities.estimatedMemoryGB ?? 4) < 6) {
+  if (isVision && (capabilities.estimatedMemoryGB ?? 4) < 6) {
+    return {
+      compatible: false,
+      reason: 'Phi 3.5 Vision requiere al menos 6 GB de RAM. Mejor en desktop.',
+    }
+  }
+
+  if (isLarge && !isVision && (capabilities.estimatedMemoryGB ?? 4) < 6) {
     return {
       compatible: false,
       reason: 'Este modelo requiere al menos 6 GB de memoria. Prueba con un modelo más pequeño.',

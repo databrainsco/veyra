@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { AVAILABLE_MODELS } from '../../services/llm/models'
+import { AVAILABLE_SPEECH_MODELS } from '../../services/speech/speechModels'
 import { modelRepo } from '../../db/repositories/settingsRepository'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
+import { getSpeechService } from '../../services/speech/TransformersSpeechService'
 import { detectDeviceCapabilities, isModelCompatible } from '../../utils/device'
-import { formatBytes } from '../../utils/helpers'
-import { ModelSpecialties } from '../../components/models/ModelSpecialties'
+import { ModelCard, isSpeechCompatible } from '../../components/models/ModelCard'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
 
 export function ModelsPage() {
   const [installed, setInstalled] = useState<InstalledModel[]>([])
   const [activeModelId, setActiveModelId] = useState<string | null>(null)
+  const [activeSpeechModelId, setActiveSpeechModelId] = useState<string | null>(null)
   const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
@@ -24,6 +26,7 @@ export function ModelsPage() {
     ])
     setInstalled(models)
     setActiveModelId(settings.activeModelId)
+    setActiveSpeechModelId(settings.activeSpeechModelId)
     setCapabilities(caps)
   }
 
@@ -31,13 +34,16 @@ export function ModelsPage() {
     loadState()
   }, [])
 
-  function getStatus(modelId: string): InstalledModel['status'] {
+  function getStatus(modelId: string, type: 'llm' | 'speech'): InstalledModel['status'] {
     const record = installed.find((m) => m.modelId === modelId)
-    if (activeModelId === modelId && getLLMService().isLoaded()) return 'active'
+    if (type === 'llm' && activeModelId === modelId && getLLMService().isLoaded()) return 'active'
+    if (type === 'speech' && activeSpeechModelId === modelId && getSpeechService().isLoaded()) {
+      return 'active'
+    }
     return record?.status ?? 'not_installed'
   }
 
-  async function handleDownload(modelId: string) {
+  async function handleDownloadLlm(modelId: string) {
     setLoadingModel(modelId)
     setError(null)
     setProgress(0)
@@ -55,7 +61,7 @@ export function ModelsPage() {
     }
   }
 
-  async function handleDelete(modelId: string) {
+  async function handleDeleteLlm(modelId: string) {
     if (!confirm('¿Eliminar este modelo?')) return
     const llm = getLLMService()
     if (activeModelId === modelId) {
@@ -66,34 +72,40 @@ export function ModelsPage() {
     await loadState()
   }
 
-  function statusLabel(status: InstalledModel['status']) {
-    const labels: Record<InstalledModel['status'], string> = {
-      not_installed: 'No instalado',
-      downloading: 'Descargando',
-      installed: 'Instalado',
-      loading: 'Cargando',
-      active: 'Activo',
-      error: 'Error',
+  async function handleDownloadSpeech(modelId: string) {
+    setLoadingModel(modelId)
+    setError(null)
+    setProgress(0)
+
+    try {
+      const speech = getSpeechService()
+      await speech.loadModel(modelId, (p) => setProgress(p))
+      await settingsRepo.update({ activeSpeechModelId: modelId })
+      setActiveSpeechModelId(modelId)
+      await loadState()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al descargar modelo de audio')
+    } finally {
+      setLoadingModel(null)
     }
-    return labels[status]
   }
 
-  function statusBadgeClass(status: InstalledModel['status']) {
-    switch (status) {
-      case 'active': return 'badge-success'
-      case 'installed': return 'badge-success'
-      case 'downloading':
-      case 'loading': return 'badge-warning'
-      case 'error': return 'badge-error'
-      default: return 'badge-muted'
+  async function handleDeleteSpeech(modelId: string) {
+    if (!confirm('¿Eliminar este modelo de audio?')) return
+    const speech = getSpeechService()
+    if (activeSpeechModelId === modelId) {
+      await speech.unload()
+      await settingsRepo.update({ activeSpeechModelId: null })
     }
+    await modelRepo.delete(modelId)
+    await loadState()
   }
 
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
       <h1 style={{ fontSize: '1.5rem', marginBottom: 8 }}>Modelos</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 24, fontSize: '0.875rem' }}>
-        Modelos de IA local para ejecutar en tu dispositivo.
+        Modelos locales descargables para texto, imágenes y audio.
       </p>
 
       {capabilities && (
@@ -110,83 +122,69 @@ export function ModelsPage() {
       )}
 
       {error && (
-        <div style={{ padding: 12, background: 'rgba(255,71,87,0.1)', borderRadius: 8, marginBottom: 16, color: 'var(--error)', fontSize: '0.875rem' }}>
+        <div
+          style={{
+            padding: 12,
+            background: 'rgba(255,71,87,0.1)',
+            borderRadius: 8,
+            marginBottom: 16,
+            color: 'var(--error)',
+            fontSize: '0.875rem',
+          }}
+        >
           {error}
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <h2 style={{ fontSize: '1rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+        Lenguaje (chat y visión)
+      </h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
         {AVAILABLE_MODELS.map((model) => {
-          const status = getStatus(model.id)
+          const status = getStatus(model.id, 'llm')
           const compat = capabilities ? isModelCompatible(model.id, capabilities) : { compatible: true }
           const isLoading = loadingModel === model.id
 
           return (
-            <div key={model.id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>{model.name}</h3>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{model.provider}</div>
-                </div>
-                <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
-              </div>
+            <ModelCard
+              key={model.id}
+              model={model}
+              status={status}
+              compat={compat}
+              isLoading={isLoading}
+              progress={progress}
+              isActive={activeModelId === model.id}
+              onDownload={() => handleDownloadLlm(model.id)}
+              onDelete={() => handleDeleteLlm(model.id)}
+            />
+          )
+        })}
+      </div>
 
-              <ModelSpecialties model={model} />
+      <h2 style={{ fontSize: '1rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+        Audio (voz a texto)
+      </h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginBottom: 12 }}>
+        Transcribe notas de voz y audio a texto en el chat. No genera voz ni música.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {AVAILABLE_SPEECH_MODELS.map((model) => {
+          const status = getStatus(model.id, 'speech')
+          const compat = isSpeechCompatible(model.id, capabilities)
+          const isLoading = loadingModel === model.id
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: '0.8125rem', marginBottom: 16 }}>
-                <div><span style={{ color: 'var(--text-muted)' }}>Tamaño:</span> {formatBytes(model.sizeBytes)}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Cuantización:</span> {model.quantization}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Contexto:</span> {model.contextLength.toLocaleString()}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Backend:</span> {model.backend.toUpperCase()}</div>
-              </div>
-
-              {!compat.compatible && (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--warning)', marginBottom: 12 }}>
-                  {compat.reason}
-                </p>
-              )}
-
-              {isLoading && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                    Descargando... {Math.round(progress * 100)}%
-                  </div>
-                  <div className="progress-bar">
-                    <div className="progress-bar-fill" style={{ width: `${progress * 100}%` }} />
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                    {formatBytes(progress * model.sizeBytes)} / {formatBytes(model.sizeBytes)}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                {status === 'not_installed' || status === 'error' ? (
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleDownload(model.id)}
-                    disabled={isLoading || !compat.compatible}
-                  >
-                    {isLoading ? 'Descargando...' : 'Descargar'}
-                  </button>
-                ) : status === 'active' ? (
-                  <button className="btn btn-secondary" disabled>Activo</button>
-                ) : (
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleDownload(model.id)}
-                    disabled={isLoading}
-                  >
-                    Activar
-                  </button>
-                )}
-                {(status === 'installed' || status === 'active' || status === 'error') && (
-                  <button className="btn btn-danger" onClick={() => handleDelete(model.id)}>
-                    Eliminar
-                  </button>
-                )}
-              </div>
-            </div>
+          return (
+            <ModelCard
+              key={model.id}
+              model={model}
+              status={status}
+              compat={compat}
+              isLoading={isLoading}
+              progress={progress}
+              isActive={activeSpeechModelId === model.id}
+              onDownload={() => handleDownloadSpeech(model.id)}
+              onDelete={() => handleDeleteSpeech(model.id)}
+            />
           )
         })}
       </div>

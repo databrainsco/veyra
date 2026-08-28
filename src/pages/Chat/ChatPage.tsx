@@ -3,13 +3,16 @@ import { conversationRepo } from '../../db/repositories/conversationRepository'
 import { messageRepo } from '../../db/repositories/messageRepository'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
+import { modelSupportsImages } from '../../services/llm/models'
+import { getSpeechService } from '../../services/speech/TransformersSpeechService'
 import { ragService } from '../../services/rag/ragService'
 import { MarkdownRenderer } from '../../components/chat/MarkdownRenderer'
 import { SourceList } from '../../components/chat/SourceList'
 import { ConversationDrawer } from '../../components/chat/ConversationDrawer'
 import { generateId, groupByDate } from '../../utils/helpers'
 import { formatUserError } from '../../utils/errors'
-import type { Conversation, ChatMessage } from '../../types'
+import { fileToDataUrl, validateAudioFile, validateImageFile } from '../../utils/files'
+import type { Conversation, ChatMessage, MessageAttachment } from '../../types'
 import './Chat.css'
 
 export function ChatPage() {
@@ -23,7 +26,14 @@ export function ChatPage() {
   const [modelLoading, setModelLoading] = useState(false)
   const [modelLoadProgress, setModelLoadProgress] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [activeModelId, setActiveModelId] = useState<string | null>(null)
+  const [pendingImage, setPendingImage] = useState<{ name: string; dataUrl: string } | null>(null)
+  const [pendingAudio, setPendingAudio] = useState<File | null>(null)
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [transcribing, setTranscribing] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
   const initDone = useRef(false)
 
   const loadConversations = useCallback(async () => {
@@ -40,6 +50,7 @@ export function ChatPage() {
     }
 
     const settings = await settingsRepo.get()
+    setActiveModelId(settings.activeModelId)
     if (!settings.activeModelId) {
       setModelLoaded(false)
       return false
@@ -72,6 +83,8 @@ export function ChatPage() {
         setMessages(msgs)
       }
       await loadModelIfNeeded()
+      const settings = await settingsRepo.get()
+      setActiveModelId(settings.activeModelId)
     }
 
     void init()
@@ -102,8 +115,47 @@ export function ChatPage() {
     setMessages(msgs)
   }
 
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const error = validateImageFile(file)
+    if (error) {
+      setAttachmentError(error)
+      return
+    }
+
+    if (!modelSupportsImages(activeModelId)) {
+      setAttachmentError('Para enviar imágenes activa Phi 3.5 Vision en Modelos.')
+      return
+    }
+
+    const dataUrl = await fileToDataUrl(file)
+    setPendingImage({ name: file.name, dataUrl })
+    setPendingAudio(null)
+    setAttachmentError(null)
+    if (imageInputRef.current) imageInputRef.current.value = ''
+  }
+
+  function handleAudioSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const error = validateAudioFile(file)
+    if (error) {
+      setAttachmentError(error)
+      return
+    }
+
+    setPendingAudio(file)
+    setPendingImage(null)
+    setAttachmentError(null)
+    if (audioInputRef.current) audioInputRef.current.value = ''
+  }
+
   async function sendMessage() {
-    if (!input.trim() || isGenerating) return
+    const hasContent = input.trim() || pendingImage || pendingAudio
+    if (!hasContent || isGenerating || transcribing) return
 
     let conv = activeConversation
     if (!conv) {
@@ -112,18 +164,73 @@ export function ChatPage() {
       if (!conv) return
     }
 
+    let messageContent = input.trim()
+    const attachments: MessageAttachment[] = []
+
+    if (pendingImage) {
+      attachments.push({
+        type: 'image',
+        name: pendingImage.name,
+        dataUrl: pendingImage.dataUrl,
+      })
+      if (!messageContent) {
+        messageContent = '¿Qué ves en esta imagen?'
+      }
+    }
+
+    if (pendingAudio) {
+      setTranscribing(true)
+      try {
+        const settings = await settingsRepo.get()
+        if (!settings.activeSpeechModelId) {
+          throw new Error('Descarga un modelo de audio (Whisper) en Modelos para transcribir voz.')
+        }
+        const speech = getSpeechService()
+        if (!speech.isLoaded() || speech.getActiveModelId() !== settings.activeSpeechModelId) {
+          await speech.loadModel(settings.activeSpeechModelId)
+        }
+        const transcription = await speech.transcribe(pendingAudio)
+        attachments.push({
+          type: 'audio',
+          name: pendingAudio.name,
+          transcription,
+        })
+        messageContent = messageContent
+          ? `${messageContent}\n\n[Audio transcrito]: ${transcription}`
+          : transcription
+      } catch (error) {
+        const errorMsg: ChatMessage = {
+          id: generateId(),
+          conversationId: conv.id,
+          role: 'assistant',
+          content: formatUserError(error),
+          createdAt: Date.now(),
+        }
+        await messageRepo.create(errorMsg)
+        setMessages((prev) => [...prev, errorMsg])
+        setTranscribing(false)
+        return
+      } finally {
+        setTranscribing(false)
+      }
+    }
+
     const userMsg: ChatMessage = {
       id: generateId(),
       conversationId: conv.id,
       role: 'user',
-      content: input.trim(),
+      content: messageContent,
       createdAt: Date.now(),
+      metadata: attachments.length > 0 ? { attachments } : undefined,
     }
 
     await messageRepo.create(userMsg)
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
     setInput('')
+    setPendingImage(null)
+    setPendingAudio(null)
+    setAttachmentError(null)
     setIsGenerating(true)
     setStreamingContent('')
 
@@ -341,7 +448,28 @@ export function ChatPage() {
                       {msg.role === 'assistant' ? (
                         <MarkdownRenderer content={msg.content} />
                       ) : (
-                        msg.content
+                        <>
+                          {msg.metadata?.attachments?.map((att, i) =>
+                            att.type === 'image' && att.dataUrl ? (
+                              <img
+                                key={`${msg.id}-img-${i}`}
+                                src={att.dataUrl}
+                                alt={att.name}
+                                className="message-image"
+                              />
+                            ) : att.type === 'audio' ? (
+                              <div key={`${msg.id}-audio-${i}`} className="message-audio-tag">
+                                🎤 {att.name}
+                                {att.transcription && (
+                                  <span className="message-audio-transcription">
+                                    Transcripción: {att.transcription}
+                                  </span>
+                                )}
+                              </div>
+                            ) : null,
+                          )}
+                          {msg.content}
+                        </>
                       )}
                       {msg.metadata?.sources && (
                         <SourceList sources={msg.metadata.sources} />
@@ -375,15 +503,73 @@ export function ChatPage() {
             </div>
 
             <div className="chat-input-area">
+              {(pendingImage || pendingAudio) && (
+                <div className="chat-attachment-preview">
+                  {pendingImage && (
+                    <div className="attachment-chip">
+                      <img src={pendingImage.dataUrl} alt="" className="attachment-thumb" />
+                      <span>{pendingImage.name}</span>
+                      <button className="btn-ghost" onClick={() => setPendingImage(null)}>✕</button>
+                    </div>
+                  )}
+                  {pendingAudio && (
+                    <div className="attachment-chip">
+                      <span>🎤 {pendingAudio.name}</span>
+                      <button className="btn-ghost" onClick={() => setPendingAudio(null)}>✕</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {attachmentError && (
+                <p className="chat-attachment-error">{attachmentError}</p>
+              )}
               <div className="chat-input-wrapper">
+                <button
+                  type="button"
+                  className="chat-attach-btn"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isGenerating || modelLoading || transcribing}
+                  title="Adjuntar imagen (requiere Phi 3.5 Vision)"
+                >
+                  📷
+                </button>
+                <button
+                  type="button"
+                  className="chat-attach-btn"
+                  onClick={() => audioInputRef.current?.click()}
+                  disabled={isGenerating || modelLoading || transcribing}
+                  title="Adjuntar audio (requiere Whisper)"
+                >
+                  🎤
+                </button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  hidden
+                  onChange={handleImageSelect}
+                />
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+                  hidden
+                  onChange={handleAudioSelect}
+                />
                 <textarea
                   className="chat-input"
-                  placeholder={modelLoading ? 'Cargando modelo...' : 'Escribe algo...'}
+                  placeholder={
+                    transcribing
+                      ? 'Transcribiendo audio...'
+                      : modelLoading
+                        ? 'Cargando modelo...'
+                        : 'Escribe algo...'
+                  }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  disabled={isGenerating || modelLoading}
+                  disabled={isGenerating || modelLoading || transcribing}
                 />
                 {isGenerating ? (
                   <button className="chat-send-btn" onClick={stopGeneration} title="Detener">
@@ -393,7 +579,7 @@ export function ChatPage() {
                   <button
                     className="chat-send-btn"
                     onClick={sendMessage}
-                    disabled={!input.trim() || modelLoading}
+                    disabled={(!input.trim() && !pendingImage && !pendingAudio) || modelLoading || transcribing}
                     title="Enviar"
                   >
                     ➤

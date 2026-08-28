@@ -1,8 +1,44 @@
-import { CreateMLCEngine, type MLCEngine } from '@mlc-ai/web-llm'
+import { CreateMLCEngine, type MLCEngine, type ChatOptions } from '@mlc-ai/web-llm'
 import type { ChatMessage, GenerationOptions, ModelInfo } from '../../types'
 import type { LLMService } from './types'
-import { getModelInfo } from './models'
+import { getModelInfo, isVisionModel } from './models'
 import { modelRepo } from '../../db/repositories/settingsRepository'
+
+type WebLLMMessageContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'image_url'; image_url: { url: string } }
+    >
+
+function toWebLLMContent(message: ChatMessage): WebLLMMessageContent {
+  const images = message.metadata?.attachments?.filter((a) => a.type === 'image' && a.dataUrl) ?? []
+
+  if (images.length === 0) {
+    return message.content
+  }
+
+  const parts: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string } }
+  > = []
+
+  if (message.content.trim()) {
+    parts.push({ type: 'text', text: message.content })
+  }
+
+  for (const image of images) {
+    if (image.dataUrl) {
+      parts.push({ type: 'image_url', image_url: { url: image.dataUrl } })
+    }
+  }
+
+  if (parts.length === 0) {
+    parts.push({ type: 'text', text: '¿Qué ves en esta imagen?' })
+  }
+
+  return parts
+}
 
 export class LocalLLMService implements LLMService {
   private engine: MLCEngine | null = null
@@ -51,19 +87,27 @@ export class LocalLLMService implements LLMService {
     await modelRepo.save({ modelId, status: 'loading' })
 
     try {
-      const engine = await CreateMLCEngine(modelId, {
-        initProgressCallback: (report) => {
-          const progress = report.progress ?? 0
-          onProgress?.(progress)
-          void modelRepo.save({
-            modelId,
-            status: 'downloading',
-            downloadProgress: progress,
-            downloadedBytes: Math.floor(progress * (getModelInfo(modelId)?.sizeBytes ?? 0)),
-            totalBytes: getModelInfo(modelId)?.sizeBytes,
-          })
+      const chatOpts: ChatOptions | undefined = isVisionModel(modelId)
+        ? { context_window_size: 6144 }
+        : undefined
+
+      const engine = await CreateMLCEngine(
+        modelId,
+        {
+          initProgressCallback: (report) => {
+            const progress = report.progress ?? 0
+            onProgress?.(progress)
+            void modelRepo.save({
+              modelId,
+              status: 'downloading',
+              downloadProgress: progress,
+              downloadedBytes: Math.floor(progress * (getModelInfo(modelId)?.sizeBytes ?? 0)),
+              totalBytes: getModelInfo(modelId)?.sizeBytes,
+            })
+          },
         },
-      })
+        chatOpts,
+      )
 
       this.engine = engine
       this.currentModelId = modelId
@@ -136,11 +180,13 @@ export class LocalLLMService implements LLMService {
 
     const chatMessages = messages.map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant',
-      content: m.content,
+      content: toWebLLMContent(m),
     }))
 
     const chunks = await this.engine.chat.completions.create({
-      messages: chatMessages,
+      messages: chatMessages as Parameters<
+        typeof this.engine.chat.completions.create
+      >[0]['messages'],
       temperature: options?.temperature ?? 0.7,
       max_tokens: options?.maxTokens ?? 2048,
       top_p: options?.topP ?? 0.95,

@@ -15,11 +15,19 @@ export interface Conversation {
   updatedAt: number
 }
 
+export interface MessageAttachment {
+  type: 'image' | 'audio'
+  name: string
+  dataUrl?: string
+  transcription?: string
+}
+
 export interface MessageMetadata {
   sources?: SourceReference[]
   ragUsed?: boolean
   edited?: boolean
   regenerated?: boolean
+  attachments?: MessageAttachment[]
 }
 
 export interface ChatMessage {
@@ -67,6 +75,8 @@ export interface ConversationMemory {
 
 export type ModelModality = 'text' | 'code' | 'images' | 'video' | 'audio'
 
+export type ModelCategory = 'llm' | 'speech'
+
 export interface ModelInfo {
   id: string
   name: string
@@ -82,6 +92,7 @@ export interface ModelInfo {
     notSupported: ModelModality[]
   }
   specialtySummary: string
+  category: ModelCategory
 }
 
 export interface InstalledModel {
@@ -143,6 +154,7 @@ export interface AppSettings {
   maxTokens: number
   onboardingComplete: boolean
   embeddingModelId: string
+  activeSpeechModelId: string | null
 }
 
 export interface DeviceCapabilities {
