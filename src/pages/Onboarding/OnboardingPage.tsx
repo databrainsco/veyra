@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { detectDeviceCapabilities, getRecommendedModelId, isModelCompatible } from '../../utils/device'
+import { applyDeviceOptimizedSettings } from '../../utils/deviceSettings'
 import { getModelInfo } from '../../services/llm/models'
 import { getLLMService } from '../../services/llm/LocalLLMService'
-import { ModelSpecialties } from '../../components/models/ModelSpecialties'
 import { formatBytes } from '../../utils/helpers'
 import type { DeviceCapabilities } from '../../types'
 import './Onboarding.css'
@@ -19,6 +19,7 @@ export function OnboardingPage() {
   const [installed, setInstalled] = useState(false)
 
   useEffect(() => {
+    void applyDeviceOptimizedSettings()
     detectDeviceCapabilities().then((caps) => {
       setCapabilities(caps)
       setRecommendedModelId(getRecommendedModelId(caps))
@@ -28,12 +29,13 @@ export function OnboardingPage() {
   const modelInfo = getModelInfo(recommendedModelId)
   const compatibility = capabilities
     ? isModelCompatible(recommendedModelId, capabilities)
-    : { compatible: true }
+    : { compatible: false, reason: 'Comprobando compatibilidad...' }
 
   async function handleDownload() {
     setDownloading(true)
     setError(null)
     try {
+      await applyDeviceOptimizedSettings()
       const llm = getLLMService()
       await llm.loadModel(recommendedModelId, (p) => setProgress(p))
       await settingsRepo.update({
@@ -48,6 +50,16 @@ export function OnboardingPage() {
     }
   }
 
+  async function handleSkipToModels() {
+    await settingsRepo.update({ onboardingComplete: true })
+    navigate('/app/models')
+  }
+
+  async function handleSkipToChat() {
+    await settingsRepo.update({ onboardingComplete: true })
+    navigate('/app/chat')
+  }
+
   function handleFinish() {
     navigate('/app/chat')
   }
@@ -56,11 +68,13 @@ export function OnboardingPage() {
     return (
       <div className="onboarding">
         <div className="onboarding-step">
-          <h2>Modelo instalado ✓</h2>
+          <h2>Modelo instalado</h2>
           <p>Tu IA local está lista para conversar.</p>
-          <button className="btn btn-primary" onClick={handleFinish}>
-            Ir al chat
-          </button>
+          <div className="onboarding-actions">
+            <button className="btn btn-primary" onClick={handleFinish}>
+              Ir al chat
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -68,73 +82,74 @@ export function OnboardingPage() {
 
   return (
     <div className="onboarding">
-      <div className="onboarding-step" style={{ maxWidth: 520 }}>
+      <div className="onboarding-step">
         <h2>Instalar modelo</h2>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+        <p className="onboarding-lead">
           Para usar Veyra necesitas un modelo de IA local. Este es el recomendado para tu dispositivo.
         </p>
 
         {modelInfo && (
           <div className="model-recommendation">
             <h3>{modelInfo.name}</h3>
-            <ModelSpecialties model={modelInfo} compact />
+            <p className="model-recommendation-summary">{modelInfo.specialtySummary}</p>
+
             <div className="model-spec">
               <span className="model-spec-label">Tamaño</span>
-              <span>{formatBytes(modelInfo.sizeBytes)}</span>
-            </div>
-            <div className="model-spec">
-              <span className="model-spec-label">Cuantización</span>
-              <span>{modelInfo.quantization}</span>
-            </div>
-            <div className="model-spec">
-              <span className="model-spec-label">Contexto</span>
-              <span>{modelInfo.contextLength.toLocaleString()}</span>
+              <span className="model-spec-value">{formatBytes(modelInfo.sizeBytes)}</span>
             </div>
             <div className="model-spec">
               <span className="model-spec-label">Backend</span>
-              <span>{modelInfo.backend.toUpperCase()}</span>
+              <span className="model-spec-value">{modelInfo.backend.toUpperCase()}</span>
             </div>
             <div className="model-spec">
               <span className="model-spec-label">Compatibilidad</span>
-              <span style={{ color: compatibility.compatible ? 'var(--success)' : 'var(--error)' }}>
+              <span
+                className={`model-spec-value ${compatibility.compatible ? 'model-spec-ok' : 'model-spec-bad'}`}
+              >
                 {compatibility.compatible
-                  ? '✓ Este dispositivo parece compatible'
-                  : `✗ ${compatibility.reason}`}
+                  ? 'Compatible con este dispositivo'
+                  : compatibility.reason ?? 'No compatible'}
               </span>
             </div>
           </div>
         )}
 
         {downloading && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ marginBottom: 8, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              Descargando modelo... {Math.round(progress * 100)}%
-            </p>
+          <div className="onboarding-progress">
+            <p>Descargando modelo... {Math.round(progress * 100)}%</p>
             <div className="progress-bar">
               <div className="progress-bar-fill" style={{ width: `${progress * 100}%` }} />
             </div>
           </div>
         )}
 
-        {error && (
-          <p style={{ color: 'var(--error)', marginBottom: 16, fontSize: '0.875rem' }}>{error}</p>
-        )}
+        {error && <p className="onboarding-error">{error}</p>}
 
-        <button
-          className="btn btn-primary"
-          onClick={handleDownload}
-          disabled={downloading || !compatibility.compatible}
-        >
-          {downloading ? 'Descargando...' : 'Descargar modelo'}
-        </button>
+        <div className="onboarding-actions">
+          <button
+            className="btn btn-primary onboarding-primary-btn"
+            onClick={handleDownload}
+            disabled={downloading || !compatibility.compatible || !recommendedModelId}
+          >
+            {downloading ? 'Descargando...' : 'Descargar modelo'}
+          </button>
 
-        <button
-          className="btn btn-ghost"
-          style={{ marginTop: 12 }}
-          onClick={() => navigate('/app/models')}
-        >
-          Ver todos los modelos
-        </button>
+          <button
+            className="btn btn-secondary"
+            onClick={handleSkipToModels}
+            disabled={downloading}
+          >
+            Ver todos los modelos
+          </button>
+
+          <button
+            className="btn btn-ghost"
+            onClick={handleSkipToChat}
+            disabled={downloading}
+          >
+            Continuar sin modelo
+          </button>
+        </div>
       </div>
     </div>
   )
