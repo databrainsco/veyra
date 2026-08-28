@@ -7,6 +7,10 @@ import { summaryRepo } from '../../db/repositories/settingsRepository'
 import type { ChatMessage } from '../../types'
 import { chunkText, normalizeText } from '../../utils/chunking'
 import { generateId } from '../../utils/helpers'
+import {
+  getGenerationProfile,
+  getMaxInputTokens,
+} from '../../utils/generationProfile'
 
 export class RAGService {
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
@@ -30,6 +34,11 @@ export class RAGService {
   }> {
     const settings = await settingsRepo.get()
     const summary = await summaryRepo.get(conversationId)
+    const profile = await getGenerationProfile()
+    const maxRagTokens = Math.min(settings.ragTokenBudget, profile.maxRagTokens)
+    const maxOutputTokens = Math.min(settings.maxTokens, profile.maxOutputTokens)
+    const contextWindow = profile.contextWindowSize
+    const maxInputTokens = getMaxInputTokens(contextWindow, maxOutputTokens)
 
     let ragResults: SearchResult[] = []
     if (settings.ragEnabled) {
@@ -42,7 +51,9 @@ export class RAGService {
       ragResults,
       recentMessages,
       currentQuestion: question,
-      maxRagTokens: settings.ragTokenBudget,
+      maxRagTokens,
+      maxRecentMessages: profile.maxRecentMessages,
+      maxInputTokens,
     })
 
     return { messages: built.messages, sources: built.sources }

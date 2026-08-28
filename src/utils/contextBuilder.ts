@@ -1,5 +1,6 @@
 import type { ChatMessage, ConversationMemory, SearchResult, SourceReference } from '../types'
 import { estimateTokens, truncateToTokenBudget } from './helpers'
+import { truncateMessagesToBudget } from './generationProfile'
 
 export interface ContextBuildOptions {
   systemPrompt: string
@@ -9,6 +10,7 @@ export interface ContextBuildOptions {
   currentQuestion: string
   maxRagTokens: number
   maxRecentMessages?: number
+  maxInputTokens?: number
 }
 
 export interface BuiltContext {
@@ -31,6 +33,7 @@ export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
     currentQuestion,
     maxRagTokens,
     maxRecentMessages = 10,
+    maxInputTokens,
   } = options
 
   const sources: SourceReference[] = []
@@ -78,9 +81,24 @@ export function buildRAGContext(options: ContextBuildOptions): BuiltContext {
 
   messages.push({ role: 'user', content: currentQuestion })
 
-  const totalTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content), 0)
+  let finalMessages = messages
+  if (maxInputTokens) {
+    const asChatMessages: ChatMessage[] = messages.map((m, i) => ({
+      id: `ctx-${i}`,
+      conversationId: 'context',
+      role: m.role,
+      content: m.content,
+      createdAt: Date.now(),
+    }))
+    finalMessages = truncateMessagesToBudget(asChatMessages, maxInputTokens).map((m) => ({
+      role: m.role as 'system' | 'user' | 'assistant',
+      content: m.content,
+    }))
+  }
 
-  return { messages, sources, totalTokens }
+  const totalTokens = finalMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0)
+
+  return { messages: finalMessages, sources, totalTokens }
 }
 
 export function buildSummaryPrompt(messages: ChatMessage[]): string {

@@ -11,7 +11,11 @@ export function formatUserError(error: unknown): string {
   }
 
   if (lower.includes('gpubuffer') || lower.includes('mapasync') || lower.includes('device lost')) {
-    return 'Error de GPU al generar la respuesta. Cierra otras pestañas, recarga la página e intenta de nuevo. En móvil, prueba un modelo más pequeño (Qwen 0.5B).'
+    return 'Error de GPU al generar la respuesta. Cierra otras pestañas, recarga la página e intenta de nuevo. En móvil usa Qwen 0.5B y desactiva RAG en Ajustes si sigue fallando.'
+  }
+
+  if (lower.includes('storage buffer') || lower.includes('exceeded the maximum')) {
+    return 'El contexto es demasiado grande para tu GPU. Prueba con Qwen 0.5B, reduce el historial o desactiva la memoria RAG en Ajustes.'
   }
 
   if (lower.includes('webgpu')) {

@@ -3,6 +3,15 @@ import type { ChatMessage, GenerationOptions, ModelInfo } from '../../types'
 import type { LLMService } from './types'
 import { getModelInfo, isVisionModel } from './models'
 import { modelRepo } from '../../db/repositories/settingsRepository'
+import {
+  capOutputTokens,
+  getContextWindowForModel,
+  getGenerationProfile,
+  getMaxInputTokens,
+  getRecoveryProfile,
+  truncateMessagesToBudget,
+  type GenerationProfile,
+} from '../../utils/generationProfile'
 
 type WebLLMMessageContent =
   | string
@@ -48,6 +57,7 @@ export class LocalLLMService implements LLMService {
   private activeGenerations = 0
   private generationGate: Promise<void> = Promise.resolve()
   private releaseGenerationGate: (() => void) | null = null
+  private activeProfile: GenerationProfile | null = null
 
   async initialize(): Promise<void> {
     // Lazy init on loadModel
@@ -111,13 +121,27 @@ export class LocalLLMService implements LLMService {
     await this.generationGate
   }
 
+  private messageHasImages(messages: ChatMessage[]): boolean {
+    return messages.some((message) =>
+      message.metadata?.attachments?.some((attachment) => attachment.type === 'image'),
+    )
+  }
+
   private async createEngine(
     modelId: string,
     onProgress?: (progress: number) => void,
+    profileOverride?: GenerationProfile,
   ): Promise<MLCEngine> {
-    const chatOpts: ChatOptions | undefined = isVisionModel(modelId)
-      ? { context_window_size: 6144 }
-      : undefined
+    const profile = profileOverride ?? (await getGenerationProfile())
+    this.activeProfile = profile
+
+    const hasImages = isVisionModel(modelId)
+    const contextWindowSize = getContextWindowForModel(modelId, profile, hasImages)
+
+    const chatOpts: ChatOptions = {
+      context_window_size: contextWindowSize,
+      max_history_size: Math.max(512, contextWindowSize - 512),
+    }
 
     return CreateMLCEngine(
       modelId,
@@ -215,13 +239,36 @@ export class LocalLLMService implements LLMService {
 
     this.acquireGenerationGate()
     try {
+      const profile = this.activeProfile ?? (await getGenerationProfile())
+      const hasImages = this.messageHasImages(messages)
+      const contextWindow = getContextWindowForModel(this.currentModelId, profile, hasImages)
+      const maxOutput = capOutputTokens(options?.maxTokens ?? profile.maxOutputTokens, profile)
+      const maxInput = getMaxInputTokens(contextWindow, maxOutput)
+      const preparedMessages = truncateMessagesToBudget(messages, maxInput)
+      const generationOptions: GenerationOptions = {
+        ...options,
+        maxTokens: maxOutput,
+      }
+
       try {
-        yield* this.generateStream(messages, options)
+        yield* this.generateStream(preparedMessages, generationOptions)
       } catch (error) {
         if (this.isRecoverableGpuError(error) && this.currentModelId) {
           const modelId = this.currentModelId
-          await this.reinitializeEngine(modelId)
-          yield* this.generateStream(messages, options)
+          const recoveryProfile = getRecoveryProfile(profile)
+          const recoveryOutput = capOutputTokens(
+            generationOptions.maxTokens ?? recoveryProfile.maxOutputTokens,
+            recoveryProfile,
+          )
+          const recoveryContext = getContextWindowForModel(modelId, recoveryProfile, hasImages)
+          const recoveryInput = getMaxInputTokens(recoveryContext, recoveryOutput)
+          const reducedMessages = truncateMessagesToBudget(preparedMessages, recoveryInput)
+
+          await this.reinitializeEngine(modelId, recoveryProfile)
+          yield* this.generateStream(reducedMessages, {
+            ...generationOptions,
+            maxTokens: recoveryOutput,
+          })
           return
         }
         throw error
@@ -231,7 +278,10 @@ export class LocalLLMService implements LLMService {
     }
   }
 
-  private async reinitializeEngine(modelId: string): Promise<void> {
+  private async reinitializeEngine(
+    modelId: string,
+    profileOverride?: GenerationProfile,
+  ): Promise<void> {
     if (this.engine) {
       try {
         await this.engine.interruptGenerate()
@@ -241,9 +291,9 @@ export class LocalLLMService implements LLMService {
     }
 
     await this.unloadModelInternal()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 250))
 
-    const engine = await this.createEngine(modelId)
+    const engine = await this.createEngine(modelId, undefined, profileOverride)
     this.engine = engine
     this.currentModelId = modelId
   }
@@ -296,7 +346,12 @@ export class LocalLLMService implements LLMService {
     return (
       lower.includes('gpubuffer') ||
       lower.includes('mapasync') ||
-      lower.includes('device lost')
+      lower.includes('device lost') ||
+      lower.includes('out of memory') ||
+      lower.includes('oom') ||
+      lower.includes('storage buffer') ||
+      lower.includes('exceeded') ||
+      lower.includes('webgpu')
     )
   }
 

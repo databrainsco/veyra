@@ -87,7 +87,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeModelId: null,
   ragEnabled: true,
   ragTopK: 5,
-  ragTokenBudget: 4000,
+  ragTokenBudget: 1200,
   chunkSize: 700,
   chunkOverlap: 0.15,
   temperature: 0.7,

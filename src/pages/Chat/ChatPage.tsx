@@ -302,9 +302,11 @@ export function ChatPage() {
         await conversationRepo.update({ ...conv, updatedAt: Date.now() })
       }
 
-      ragService
-        .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
-        .catch(() => {})
+      window.setTimeout(() => {
+        ragService
+          .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
+          .catch(() => {})
+      }, 2000)
     } catch (error) {
       const errorMsg: ChatMessage = {
         id: generateId(),
