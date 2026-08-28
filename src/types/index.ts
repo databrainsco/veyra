@@ -65,6 +65,8 @@ export interface ConversationMemory {
   updatedAt: number
 }
 
+export type ModelModality = 'text' | 'code' | 'images' | 'video' | 'audio'
+
 export interface ModelInfo {
   id: string
   name: string
@@ -74,6 +76,12 @@ export interface ModelInfo {
   contextLength: number
   backend: 'webgpu' | 'wasm' | 'unknown'
   requirements: string[]
+  specialties: string[]
+  modalities: {
+    supported: ModelModality[]
+    notSupported: ModelModality[]
+  }
+  specialtySummary: string
 }
 
 export interface InstalledModel {

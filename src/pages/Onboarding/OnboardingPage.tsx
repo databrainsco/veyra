@@ -4,28 +4,13 @@ import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { detectDeviceCapabilities, getRecommendedModelId, isModelCompatible } from '../../utils/device'
 import { getModelInfo } from '../../services/llm/models'
 import { getLLMService } from '../../services/llm/LocalLLMService'
+import { ModelSpecialties } from '../../components/models/ModelSpecialties'
 import { formatBytes } from '../../utils/helpers'
 import type { DeviceCapabilities } from '../../types'
 import './Onboarding.css'
 
-const STEPS = [
-  {
-    title: 'Bienvenido a Veyra.',
-    text: 'Tu IA personal vive en tu dispositivo.',
-  },
-  {
-    title: 'Memoria personal',
-    text: 'Veyra puede recordar tus conversaciones y aprender de tus documentos.',
-  },
-  {
-    title: 'Instalar un modelo',
-    text: 'Primero necesitamos instalar un modelo de IA local.',
-  },
-]
-
 export function OnboardingPage() {
   const navigate = useNavigate()
-  const [step, setStep] = useState(0)
   const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null)
   const [recommendedModelId, setRecommendedModelId] = useState('')
   const [downloading, setDownloading] = useState(false)
@@ -74,32 +59,8 @@ export function OnboardingPage() {
           <h2>Modelo instalado ✓</h2>
           <p>Tu IA local está lista para conversar.</p>
           <button className="btn btn-primary" onClick={handleFinish}>
-            Comenzar a conversar
+            Ir al chat
           </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (step < STEPS.length) {
-    const current = STEPS[step]!
-    return (
-      <div className="onboarding">
-        <div className="onboarding-step">
-          <h2>{current.title}</h2>
-          <p>{current.text}</p>
-          <button
-            className="btn btn-primary"
-            onClick={() => setStep(step + 1)}
-          >
-            Continuar
-          </button>
-          <div className="onboarding-dots">
-            {STEPS.map((_, i) => (
-              <div key={i} className={`onboarding-dot ${i === step ? 'active' : ''}`} />
-            ))}
-            <div className={`onboarding-dot ${step === STEPS.length ? 'active' : ''}`} />
-          </div>
         </div>
       </div>
     )
@@ -108,11 +69,15 @@ export function OnboardingPage() {
   return (
     <div className="onboarding">
       <div className="onboarding-step" style={{ maxWidth: 520 }}>
-        <h2>Modelo recomendado</h2>
+        <h2>Instalar modelo</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+          Para usar Veyra necesitas un modelo de IA local. Este es el recomendado para tu dispositivo.
+        </p>
 
         {modelInfo && (
           <div className="model-recommendation">
             <h3>{modelInfo.name}</h3>
+            <ModelSpecialties model={modelInfo} compact />
             <div className="model-spec">
               <span className="model-spec-label">Tamaño</span>
               <span>{formatBytes(modelInfo.sizeBytes)}</span>

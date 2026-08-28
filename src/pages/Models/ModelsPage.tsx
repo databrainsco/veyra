@@ -5,6 +5,7 @@ import { settingsRepo } from '../../db/repositories/settingsRepository'
 import { getLLMService } from '../../services/llm/LocalLLMService'
 import { detectDeviceCapabilities, isModelCompatible } from '../../utils/device'
 import { formatBytes } from '../../utils/helpers'
+import { ModelSpecialties } from '../../components/models/ModelSpecialties'
 import type { InstalledModel, DeviceCapabilities } from '../../types'
 
 export function ModelsPage() {
@@ -129,6 +130,8 @@ export function ModelsPage() {
                 </div>
                 <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
               </div>
+
+              <ModelSpecialties model={model} />
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, fontSize: '0.8125rem', marginBottom: 16 }}>
                 <div><span style={{ color: 'var(--text-muted)' }}>Tamaño:</span> {formatBytes(model.sizeBytes)}</div>

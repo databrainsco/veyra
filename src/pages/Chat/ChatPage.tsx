@@ -90,24 +90,9 @@ export function ChatPage() {
     }
     await conversationRepo.create(conv)
 
-    const welcomeMsg: ChatMessage = {
-      id: generateId(),
-      conversationId: conv.id,
-      role: 'assistant',
-      content: `Hola, soy Veyra.
-
-Puedes preguntarme cualquier cosa.
-
-También puedes darme documentos o permitirme utilizar tus conversaciones anteriores como memoria.
-
-Todo lo que pueda procesarse localmente permanece en este dispositivo.`,
-      createdAt: Date.now(),
-    }
-    await messageRepo.create(welcomeMsg)
-
     setConversations((prev) => [conv, ...prev])
     setActiveConversation(conv)
-    setMessages([welcomeMsg])
+    setMessages([])
     setDrawerOpen(false)
   }
 
