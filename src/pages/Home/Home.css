@@ -1,0 +1,78 @@
+.home {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+}
+
+.home-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 30% 20%, rgba(108, 92, 231, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(108, 92, 231, 0.05) 0%, transparent 50%),
+    var(--bg-primary);
+  animation: gradient-shift 20s ease infinite;
+  background-size: 200% 200%;
+}
+
+.home-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(108, 92, 231, 0.3);
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+}
+
+.home-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 400px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.home-logo {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--text-primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-tagline {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  font-weight: 300;
+}
+
+.home-subtitle {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  margin-bottom: 40px;
+}
+
+.home-privacy {
+  margin-top: 48px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}

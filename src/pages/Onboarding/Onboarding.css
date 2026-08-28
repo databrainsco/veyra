@@ -1,0 +1,74 @@
+.onboarding {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.onboarding-step {
+  max-width: 480px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.onboarding-step h2 {
+  font-size: 1.5rem;
+  margin-bottom: 16px;
+}
+
+.onboarding-step p {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.onboarding-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 32px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.onboarding-dot.active {
+  background: var(--accent);
+  width: 24px;
+  border-radius: 4px;
+}
+
+.model-recommendation {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.model-recommendation h3 {
+  font-size: 1.125rem;
+  margin-bottom: 16px;
+}
+
+.model-spec {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.model-spec:last-child {
+  border-bottom: none;
+}
+
+.model-spec-label {
+  color: var(--text-muted);
+}
