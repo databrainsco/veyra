@@ -266,6 +266,9 @@ export class LocalLLMService implements LLMService {
       } catch (error) {
         if (this.isRecoverableGpuError(error) && this.currentModelId) {
           const modelId = this.currentModelId
+          if (this.isDisposedError(error)) {
+            this.invalidateEngine()
+          }
           const recoveryProfile = getRecoveryProfile(profile)
           const recoveryOutput = capOutputTokens(
             generationOptions.maxTokens ?? recoveryProfile.maxOutputTokens,
@@ -340,6 +343,11 @@ export class LocalLLMService implements LLMService {
         const content = chunk.choices[0]?.delta?.content
         if (content) yield content
       }
+    } catch (error) {
+      if (this.isDisposedError(error)) {
+        this.invalidateEngine()
+      }
+      throw error
     } finally {
       if (this.abortController?.signal.aborted && this.engine) {
         try {
@@ -351,7 +359,19 @@ export class LocalLLMService implements LLMService {
     }
   }
 
+  private invalidateEngine(): void {
+    this.engine = null
+    this.currentModelId = null
+  }
+
+  private isDisposedError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    const lower = message.toLowerCase()
+    return lower.includes('already been disposed') || lower.includes('has been disposed')
+  }
+
   private isRecoverableGpuError(error: unknown): boolean {
+    if (this.isDisposedError(error)) return true
     const message = error instanceof Error ? error.message : String(error)
     const lower = message.toLowerCase()
     return (

@@ -21,7 +21,7 @@ import {
 } from '../../components/chat/ChatIcons'
 import { generateId } from '../../utils/helpers'
 import { formatUserError, isGpuError } from '../../utils/errors'
-import { detectDeviceCapabilities, isModelCompatible, getRecommendedModelId } from '../../utils/device'
+import { detectDeviceCapabilities, isModelCompatible, getRecommendedModelId, isMobilePlatform } from '../../utils/device'
 import { applyDeviceOptimizedSettings } from '../../utils/deviceSettings'
 import { getModelInfo } from '../../services/llm/models'
 import { fileToDataUrl, validateImageFile } from '../../utils/files'
@@ -43,6 +43,7 @@ export function ChatPage() {
   const [activeModelId, setActiveModelId] = useState<string | null>(null)
   const [pendingImage, setPendingImage] = useState<{ name: string; dataUrl: string } | null>(null)
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [modelLoadError, setModelLoadError] = useState<string | null>(null)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -96,6 +97,7 @@ export function ChatPage() {
 
     setModelLoading(true)
     setModelLoadProgress(0)
+    setModelLoadError(null)
     setModelLoadingMessage(
       wasInstalled ? 'Activando modelo desde caché...' : 'Descargando modelo por primera vez...',
     )
@@ -103,8 +105,13 @@ export function ChatPage() {
       await llm.ensureModelLoaded(settings.activeModelId, (p) => setModelLoadProgress(p))
       setModelLoaded(true)
       return true
-    } catch {
+    } catch (err) {
       setModelLoaded(false)
+      const record = await modelRepo.get(settings.activeModelId)
+      const message =
+        record?.errorMessage ??
+        (err instanceof Error ? err.message : 'No se pudo cargar el modelo')
+      setModelLoadError(message)
       return false
     } finally {
       setModelLoading(false)
@@ -127,13 +134,11 @@ export function ChatPage() {
 
       const settings = await settingsRepo.get()
       setActiveModelId(settings.activeModelId)
-      if (settings.activeModelId && getLLMService().isLoaded()) {
-        setModelLoaded(true)
-      }
+      await loadModelIfNeeded()
     }
 
     void init()
-  }, [loadConversations])
+  }, [loadConversations, loadModelIfNeeded])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -221,6 +226,8 @@ export function ChatPage() {
 
     try {
       const settings = await settingsRepo.get()
+      const capabilities = await detectDeviceCapabilities()
+      const isMobile = isMobilePlatform(capabilities)
       const { messages: contextMessages, sources } = await ragService.buildContext(
         conv.id,
         userMsg.content,
@@ -295,9 +302,11 @@ export function ChatPage() {
       }
 
       window.setTimeout(() => {
-        ragService
-          .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
-          .catch(() => {})
+        if (!isMobile) {
+          ragService
+            .indexConversation(conv.id, conv.title, [...updatedMessages, assistantMsg])
+            .catch(() => {})
+        }
       }, 2000)
     } catch (error) {
       const errorMsg: ChatMessage = {
@@ -439,7 +448,7 @@ export function ChatPage() {
   }
 
   const activeModelName = activeModelId ? getModelInfo(activeModelId)?.name : null
-  const canSend = (input.trim() || pendingImage) && !modelLoading
+  const canSend = (input.trim() || pendingImage) && !modelLoading && (modelLoaded || !activeModelId)
 
   return (
     <div className="chat-page">
@@ -505,6 +514,12 @@ export function ChatPage() {
               />
             </div>
             <span>{modelLoadingMessage}</span>
+          </div>
+        )}
+
+        {modelLoadError && !modelLoading && (
+          <div className="model-loading-banner" style={{ color: 'var(--error)' }}>
+            {modelLoadError}. Ve a Modelos y pulsa Descargar de nuevo.
           </div>
         )}
 

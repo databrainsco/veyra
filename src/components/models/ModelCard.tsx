@@ -121,6 +121,12 @@ export function ModelCard({
         <p style={{ fontSize: '0.8125rem', color: 'var(--warning)', marginBottom: 12 }}>{compat.reason}</p>
       )}
 
+      {status === 'error' && (
+        <p style={{ fontSize: '0.8125rem', color: 'var(--error)', marginBottom: 12 }}>
+          La descarga o activación falló. Pulsa Descargar para reintentar.
+        </p>
+      )}
+
       {isLoading && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>

@@ -123,6 +123,11 @@ export function ModelsPage() {
     setError(null)
     setProgress(0)
 
+    const existing = await modelRepo.get(modelId)
+    if (existing?.status === 'error') {
+      await modelRepo.save({ modelId, status: 'not_installed', errorMessage: undefined })
+    }
+
     try {
       const llm = getLLMService()
       await llm.loadModel(modelId, (p) => setProgress(p))

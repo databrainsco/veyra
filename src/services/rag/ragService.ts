@@ -84,18 +84,24 @@ export class RAGService {
       ? Math.max(200, maxRagTokens - conversationTokenBudget)
       : 0
 
-    await this.ensureConversationIndexed(conversationId, conversationTitle, recentMessages)
+    // On mobile, skip embedding search before generation — loading embeddings
+    // alongside WebGPU LLM can dispose the engine on constrained devices.
+    if (!isMobile) {
+      await this.ensureConversationIndexed(conversationId, conversationTitle, recentMessages)
+    }
 
     let conversationRagResults: SearchResult[] = []
-    try {
-      conversationRagResults = await this.search(question, {
-        sourceType: 'conversation',
-        sourceId: conversationId,
-        topK: isMobile ? 3 : settings.ragTopK,
-      })
-      conversationRagResults = applyTokenBudget(conversationRagResults, conversationTokenBudget)
-    } catch {
-      conversationRagResults = []
+    if (!isMobile) {
+      try {
+        conversationRagResults = await this.search(question, {
+          sourceType: 'conversation',
+          sourceId: conversationId,
+          topK: settings.ragTopK,
+        })
+        conversationRagResults = applyTokenBudget(conversationRagResults, conversationTokenBudget)
+      } catch {
+        conversationRagResults = []
+      }
     }
 
     let globalRagResults: SearchResult[] = []

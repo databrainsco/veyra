@@ -6,6 +6,10 @@ export function formatUserError(error: unknown): string {
     return 'El modelo de IA no está cargado. Ve a Modelos y actívalo, o espera a que termine de cargar.'
   }
 
+  if (lower.includes('already been disposed') || lower.includes('has been disposed')) {
+    return 'El motor del modelo se reinició. Espera unos segundos y vuelve a enviar el mensaje.'
+  }
+
   if (lower.includes('tokenizer') && lower.includes('already deleted')) {
     return 'El modelo se descargó mientras generaba una respuesta. Espera a que termine o pulsa Detener antes de cambiar de modelo. Recarga la página si el error persiste.'
   }
@@ -36,6 +40,8 @@ export function isGpuError(error: unknown): boolean {
     lower.includes('gpubuffer') ||
     lower.includes('mapasync') ||
     lower.includes('device lost') ||
-    lower.includes('webgpu')
+    lower.includes('webgpu') ||
+    lower.includes('already been disposed') ||
+    lower.includes('has been disposed')
   )
 }
